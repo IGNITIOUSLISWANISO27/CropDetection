@@ -17,8 +17,8 @@ html_block(f"""
   <p>Connecting crop conditions, rainfall, temperature, water stress and solar potential to deliver
   location-specific agricultural intelligence.</p>
   <div class="chips"><span class="chip">MAIZE FIRST</span><span class="chip o">LOCATION-BASED</span></div>
-  <div class="explore"><b>Explore agricultural conditions by location:</b> provinces · districts · individual fields
-  <span style="opacity:.75">(agro-ecological zones next)</span></div>
+  <div class="explore"><b>Explore agricultural conditions by location:</b> districts · agricultural zones · individual fields
+  <span style="opacity:.75">(and provinces)</span></div>
   <a class="fp-btn gold" href="{link('/location')}" target="_self">{icon("doc", 18)} Open a location report →</a>
   <a class="fp-btn ghost" href="{link('/map')}" target="_self">{icon("layers", 18)} Explore the map</a>
  </div>
@@ -50,20 +50,29 @@ with right:
         html_block(f'<div class="fp-panel-h"><span>{icon("pin", 18, "#1F4D3A")} Explore by location</span></div>')
         D = nd.districts.sort_values("district")
         provs = sorted(D["province"].unique())
-        opts = (["province:" + p for p in provs] + ["district:" + d for d in D["district_id"]]
+        from fieldpriority.national.aggregate import zone_members
+        from fieldpriority.national.zones import REGIONS as ZONES
+        zc = [z for z in ["I", "IIa", "IIb", "II", "III"] if zone_members(nd, z)]
+        opts = (["zone:" + z for z in zc] + ["province:" + p for p in provs] + ["district:" + d for d in D["district_id"]]
                 + ["field:" + f"{r.pilot}|{r.field_id}" for r in F.itertuples()])
         names = dict(zip(D["district_id"], D["district"] + " · " + D["province"]))
 
         def _fmt(o):
+            if o.startswith("zone:"):
+                z = ZONES[o[5:]]
+                return f"Agricultural zone: {z['name']}, {z['short']}"
             if o.startswith("province:"):
                 return f"{o[9:]} Province (all its districts)"
             if o.startswith("district:"):
                 return names[o[9:]] + " (district)"
             return f"Field {o.split('|')[1]} · {o[6:].split('|')[0].title()} pilot"
-        pick = st.selectbox("Province, district or field", opts, index=None,
-                            placeholder="Type a province, district or field…", format_func=_fmt)
+        pick = st.selectbox("District, agricultural zone, province or field", opts, index=None,
+                            placeholder="Type a district, zone, province or field…", format_func=_fmt)
         if pick:
-            if pick.startswith("province:"):
+            if pick.startswith("zone:"):
+                st.page_link("views/location.py", label="Open the zone report", icon=":material/arrow_forward:",
+                             query_params={"zone": pick[5:]})
+            elif pick.startswith("province:"):
                 st.page_link("views/location.py", label="Open the province report", icon=":material/arrow_forward:",
                              query_params={"province": pick[9:]})
             elif pick.startswith("district:"):

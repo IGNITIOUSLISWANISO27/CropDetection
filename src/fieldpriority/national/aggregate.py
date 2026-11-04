@@ -52,8 +52,33 @@ def province_view(nd, cfg, province):
     member district ids). nd: NationalData; cfg: national config (classes, sources)."""
     D = nd.districts
     members = D[D["province"] == province]["district_id"].tolist()
-    pid = province_id(province)
-    L = ("province", pid, f"{province} Province")
+    return group_view(nd, cfg, members, ("province", province_id(province), f"{province} Province"), province,
+                      "Province")
+
+
+def zone_id(code):
+    return "zone:" + str(code)
+
+
+def zone_members(nd, code):
+    """Districts whose largest share lies in agricultural zone `code` (I, II, III, IIa, IIb)."""
+    if not nd.available:
+        return []
+    t = nd.indicators[(nd.indicators["indicator"] == "agro_zone") & (nd.indicators["status"] == "ok")]
+    return t[t["class"] == code]["location_id"].tolist()
+
+
+def zone_view(nd, cfg, code):
+    from .zones import REGIONS
+    members = zone_members(nd, code)
+    return group_view(nd, cfg, members, ("zone", zone_id(code), f"Agricultural zone: {REGIONS[code]['name']}"), "",
+                      "Zone")
+
+
+def group_view(nd, cfg, members, L, province="", kind="Area"):
+    """Area-weighted view of a set of districts (a province or an agricultural zone)."""
+    D = nd.districts
+    pid = L[1]
     if not nd.available or not members:
         return {}, pd.DataFrame(), pd.DataFrame(), members
     c, S = cfg["classes"], cfg["sources"]
@@ -63,7 +88,7 @@ def province_view(nd, cfg, province):
     per = (dt.date(*window[0], 1), month_end(*window[-1]))
     label = rep.get("period_label", "")
     blabel = f"same months of the {nb} previous seasons"
-    cov = f"Province average: area-weighted mean of its {len(members)} districts"
+    cov = f"{kind} average: area-weighted mean of its {len(members)} districts"
     M = weighted_monthly(nd.monthly, D, members)
     M["district_id"] = pid
     recs = {}

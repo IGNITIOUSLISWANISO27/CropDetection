@@ -16,6 +16,11 @@ considerations). The pilot fields (Solwezi, Chongwe) sit inside it under *Pilot 
 Each of the 10 provinces also has a report (`src/fieldpriority/national/aggregate.py`): area-weighted averages of its
 districts, with a table linking to each district. Reports show field photos from Kobo visits (with `KOBO_TOKEN` in the
 app's secrets) and a seasonal comparison of rainfall and temperature over the last 11 seasons.
+**Agricultural zones** (`src/fieldpriority/national/zones.py`): Zambia's agro-ecological regions (I below 800 mm a
+year, II 800-1,000 mm, III above 1,000 mm), approximated from CHIRPS October-May rainfall over the baseline seasons
+until the official map is supplied. Save the official map as `config/agro_regions_official.geojson` (a `region`
+column with I, IIa, IIb, III) and it replaces the approximation. Each district gets its zone and shares; each zone has
+its own report and a map layer. The first update downloads October and May rainfall once (about 20 months).
 
 | Layer | Source | Status |
 |---|---|---|

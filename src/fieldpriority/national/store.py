@@ -25,6 +25,7 @@ class NationalData:
     seasons: pd.DataFrame = None
     report: dict = field(default_factory=dict)
     source_note: str = ""
+    zones: gpd.GeoDataFrame = None          # agricultural zone polygons (region, name, short, rain, source)
 
     @property
     def available(self):
@@ -53,9 +54,11 @@ def load_local(cfg=None, out_dir=None):
     d = Path(out_dir or os.environ.get("FIELDPRIORITY_NATIONAL_OUTPUTS") or Path(cfg["_root"]) / cfg["output_dir"])
     if not (d / "district_indicators.csv").exists():
         return NationalData(_districts(cfg), source_note="No district layers yet (run monthly_update.bat)")
+    zp = d / "agro_zones.geojson"
     return NationalData(_districts(cfg), _clean(pd.read_csv(d / "district_indicators.csv")),
                         pd.read_csv(d / "district_monthly.csv"), pd.read_csv(d / "district_seasons.csv"),
-                        json.loads((d / "national_report.json").read_text()), f"Local files in {d}")
+                        json.loads((d / "national_report.json").read_text()), f"Local files in {d}",
+                        gpd.read_file(zp) if zp.exists() else None)
 
 
 def push(store, cfg=None, out_dir=None):
@@ -74,6 +77,8 @@ def push(store, cfg=None, out_dir=None):
     n += store._write("seasons", [(did, {"district_id": did, "rows": g.drop(columns="district_id").to_dict("records")})
                                   for did, g in s.groupby("district_id")])
     n += store._write("meta", [("latest", nd.report)])
+    if nd.zones is not None and len(nd.zones):
+        n += store._write("meta", [("zones", {"geojson": nd.zones.to_json()})])
     return n
 
 
@@ -86,8 +91,10 @@ def load_firebase(store, cfg=None):
     mon = pd.DataFrame([[d["district_id"], *r] for d in store.read("monthly") for r in (d.get("rows") or [])],
                        columns=["district_id", "variable", "year", "month", "value"])
     sea = pd.DataFrame([{"district_id": d["district_id"], **r} for d in store.read("seasons") for r in (d.get("rows") or [])])
+    zd = store.read_doc("meta", "zones")
+    zones = gpd.GeoDataFrame.from_features(json.loads(zd["geojson"])["features"], crs=4326) if zd.get("geojson") else None
     return NationalData(_districts(cfg), _clean(ind), mon, sea, store.read_doc("meta", "latest"),
-                        "Firebase (Firestore), collections national_*")
+                        "Firebase (Firestore), collections national_*", zones)
 
 
 def load(source="auto", cred=None, cfg=None, out_dir=None):

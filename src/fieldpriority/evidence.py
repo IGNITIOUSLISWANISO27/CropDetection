@@ -41,6 +41,8 @@ INDICATORS = {
     "verified_reports": "Verified field reports",
     "monitored_fields": "Monitored fields",
     "crop_condition": "Crop condition (monitored fields)",
+    "agro_zone": "Agricultural zone (agro-ecological region)",
+    "annual_rainfall_normal": "Normal rainfall, October to May",
 }
 
 

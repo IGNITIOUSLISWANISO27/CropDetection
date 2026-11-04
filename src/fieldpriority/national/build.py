@@ -25,6 +25,7 @@ from . import (MON, baseline_years, latest_window, load_national_config, month_e
                window_label)
 from .interpret import below_class, rain_class, temp_class, water_stress
 from .sources import chirps_zambia, district_index, power_table, zonal_means
+from . import zones as Z
 from ..evidence import pending, record
 
 
@@ -81,6 +82,50 @@ def _window_vs_base(t, var, did, window, base_seasons):
     return float(np.mean(cur)), float(np.mean(base)), len(base)
 
 
+def agro_zones(cfg, districts, bseasons, data_dir, caches, offline, available, log=print):
+    """(zone_info per district, region polygons, source dict, seasons used). Official map first, else the
+    rainfall approximation (CHIRPS October-May mean over the baseline seasons)."""
+    off = Z.official_regions(cfg["_root"])
+    if off is not None:
+        g = off.dissolve("region").reset_index()[["region", "geometry"]]
+        eq = "EPSG:32735"
+        info = {}
+        du = districts.to_crs(eq)
+        gu = g.to_crs(eq)
+        for d in du.itertuples():
+            inter = gu.geometry.intersection(d.geometry).area
+            if inter.sum() <= 0:
+                continue
+            shares = {r: float(a / inter.sum() * 100) for r, a in zip(gu["region"], inter) if a > 0}
+            info[d.district_id] = {"shares": shares, "major": max(shares, key=shares.get), "rain": None}
+        src = {"name": "Official agro-ecological region map (config/agro_regions_official.geojson)",
+               "period": "", "resolution": "Map polygons", "confidence": "High", "note": "",
+               "method": "Share of each district's area in each official region", "official": True}
+        return info, g, src, []
+
+    def read(y, m):
+        if offline and not available(y, m):
+            raise RuntimeError(f"{y}-{m:02d} not on disk")
+        return chirps_zambia(y, m, data_dir, caches, log)
+
+    grid, tr, crs, used = Z.annual_grid(bseasons, read, log)
+    if grid is None or len(used) < 5:
+        return None, None, {}, used
+    regions = Z.classify(grid)
+    idx = district_index(districts, grid.shape, tr)
+    regions[idx == 0] = 0
+    info = Z.district_zones(districts, regions, grid, idx)
+    polys = Z.zone_polygons(regions, tr, districts)
+    period = f"{season_name(used[0])} to {season_name(used[-1])} ({len(used)} seasons)"
+    src = {"name": "Agro-ecological region rainfall criterion (FAO Zambia country profile) applied to CHIRPS v3.0 "
+                   "October-May rainfall", "period": period, "resolution": "0.05 degree (about 5 km) cells",
+           "confidence": "Medium", "official": False,
+           "method": "Mean October-May rainfall per cell: Region I below 800 mm, II 800-1,000 mm, III above 1,000 mm",
+           "note": "Approximate: rainfall only, ten seasons; the official map also uses soils and altitude, and "
+                   "splits Region II into IIa and IIb."}
+    return info, polys, src, used
+
+
 def build(cfg=None, today=None, offline=False, log=print):
     cfg = cfg or load_national_config()
     root = Path(cfg["_root"])
@@ -117,6 +162,14 @@ def build(cfg=None, today=None, offline=False, log=print):
     log("Rainfall (CHIRPS v3.0)")
     rain = rainfall_monthly(districts, [ym for ym in all_months if not offline or available(*ym)], data_dir,
                             caches, log)
+
+    # ---- agricultural zones (agro-ecological regions): official map if supplied, else rainfall approximation
+    log("Agricultural zones")
+    zone_info, zone_polys, zone_src, zone_seasons = agro_zones(cfg, districts, bseasons, data_dir, caches, offline,
+                                                               available, log)
+    if zone_info is None:
+        notes.append("Agricultural zones not computed: October and May rainfall for at least 5 baseline seasons is "
+                     "needed (run the update with internet).")
 
     # ---- temperature + solar (NASA POWER)
     solar_year = today.year - 1
@@ -297,6 +350,38 @@ def build(cfg=None, today=None, offline=False, log=print):
             recs.append(pending(*L, "maize_share_pct", "Needs the Earth Engine district export (WorldCereal maize map)",
                                 S["cropland"]["name"], P))
 
+    # agricultural zone of each district
+    for d in districts.itertuples():
+        L = ("district", d.district_id, d.district)
+        z = (zone_info or {}).get(d.district_id)
+        if not z:
+            recs.append(pending(*L, "agro_zone", "Needs October and May rainfall for the baseline seasons, or the "
+                                "official agro-ecological region map", "", d.province))
+            continue
+        R = Z.REGIONS[z["major"]]
+        others = ", ".join(f"{Z.REGIONS[k]['name']} {v:.0f}%" for k, v in sorted(z["shares"].items(),
+                           key=lambda kv: -kv[1]) if k != z["major"] and v >= 5)
+        recs.append(record(*L, "agro_zone", z["shares"][z["major"]], "% of district",
+                           f"{R['name']} ({R['short']})" + (f" · also {others}" if others else ""), z["major"],
+                           (dt.date(zone_seasons[0], 10, 1), dt.date(zone_seasons[-1] + 1, 5, 31))
+                           if zone_seasons else (None, None), zone_src["period"], zone_src["name"], "",
+                           zone_src["resolution"], "District: share of its area in each region", "derived",
+                           zone_src["method"], "", zone_src["confidence"], zone_src["note"], province=d.province))
+        if z.get("rain") is not None:
+            recs.append(record(*L, "annual_rainfall_normal", z["rain"], "mm", f"{z['rain']:.0f} mm a year", None,
+                               (dt.date(zone_seasons[0], 10, 1), dt.date(zone_seasons[-1] + 1, 5, 31)),
+                               zone_src["period"], S["rainfall"]["name"], S["rainfall"]["url"],
+                               S["rainfall"]["resolution"], "District average", S["rainfall"]["data_type"],
+                               "Mean October-May rainfall over the baseline seasons", "", "High",
+                               "Ten seasons only, not a 30-year climate normal.", province=d.province))
+    if zone_polys is not None:
+        zp = zone_polys.copy()
+        zp["name"] = zp["region"].map(lambda r: Z.REGIONS[r]["name"])
+        zp["short"] = zp["region"].map(lambda r: Z.REGIONS[r]["short"])
+        zp["rain"] = zp["region"].map(lambda r: Z.REGIONS[r]["rain"])
+        zp["source"] = zone_src["name"]
+        zp.to_file(out_dir / "agro_zones.geojson", driver="GeoJSON", COORDINATE_PRECISION=3)
+
     ind = pd.DataFrame(recs)
     ind.to_csv(out_dir / "district_indicators.csv", index=False)
     monthly.to_csv(out_dir / "district_monthly.csv", index=False)
@@ -307,7 +392,8 @@ def build(cfg=None, today=None, offline=False, log=print):
               "period_start": str(start), "period_end": str(end),
               "baseline_seasons": [season_name(s) for s in bseasons], "solar_year": solar_year,
               "n_districts": int(len(districts)), "rain_districts": int(len(rain_ok)),
-              "boundaries_source": cfg["boundaries_source"], "sources": cfg["sources"], "notes": notes}
+              "boundaries_source": cfg["boundaries_source"], "sources": cfg["sources"], "notes": notes,
+              "zones": ({k: v for k, v in zone_src.items()} if zone_info else None)}
     (out_dir / "national_report.json").write_text(json.dumps(report, indent=2, default=str))
     log(f"Wrote {len(ind)} indicator records for {len(districts)} districts to {out_dir}")
     for n in notes:

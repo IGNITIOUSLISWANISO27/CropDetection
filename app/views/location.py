@@ -11,13 +11,18 @@ F = monitored_fields(nd)
 D = nd.districts.sort_values("district").reset_index(drop=True)
 ids = D["district_id"].tolist()
 provs = sorted(D["province"].unique())
-OPTS = ["p:" + p for p in provs] + ["d:" + i for i in ids]
-names = {**{"p:" + p: f"{p} Province (all {int((D['province'] == p).sum())} districts)" for p in provs},
+from fieldpriority.national.aggregate import zone_members
+from fieldpriority.national.zones import REGIONS as ZONES
+zcodes = [z for z in ["I", "IIa", "IIb", "II", "III"] if zone_members(nd, z)]
+OPTS = ["z:" + z for z in zcodes] + ["p:" + p for p in provs] + ["d:" + i for i in ids]
+names = {**{"z:" + z: f"Agricultural zone: {ZONES[z]['name']}, {ZONES[z]['short']} ({len(zone_members(nd, z))} districts)"
+            for z in zcodes},
+         **{"p:" + p: f"{p} Province (all {int((D['province'] == p).sum())} districts)" for p in provs},
          **dict(zip("d:" + D["district_id"], D["district"] + " · " + D["province"] + " Province"))}
 per = period_of(nd)
 
-qd, qprov = st.query_params.get("district"), st.query_params.get("province")
-want = ("d:" + qd) if qd in ids else ("p:" + qprov) if qprov in provs else None
+qd, qprov, qz = st.query_params.get("district"), st.query_params.get("province"), st.query_params.get("zone")
+want = ("d:" + qd) if qd in ids else ("p:" + qprov) if qprov in provs else ("z:" + qz) if qz in zcodes else None
 if "loc_pick" not in st.session_state or (want and want != st.session_state.get("loc_pick")):
     st.session_state["loc_pick"] = want or ("d:" + (F["district_id"].dropna().iloc[0] if len(F) and
                                                     F["district_id"].notna().any() else "solwezi"))
@@ -27,10 +32,22 @@ s1, s2 = st.columns([2, 1.2], vertical_alignment="bottom")
 pick = s1.selectbox("Location", OPTS, key="loc_pick", format_func=names.get,
                     help="A province (all its districts together) or one district. Monitored pilot fields have their "
                          "own field profile (Assessments).")
-is_prov = pick.startswith("p:")
-if is_prov:
+is_zone = pick.startswith("z:")
+is_prov = pick.startswith("p:") or is_zone          # both are groups of districts
+for k in ("district", "province", "zone"):
+    st.query_params.pop(k, None)
+if is_zone:
+    zc = pick[2:]
+    st.query_params["zone"] = zc
+    from fieldpriority.national.aggregate import zone_view, zone_id
+    recs, M, S_prov, members = zone_view(nd, NCFG, zc)
+    did = zone_id(zc)
+    here = F[F["district_id"].isin(members)] if len(F) else F
+    prov = None
+    name, sub = f"{ZONES[zc]['name']}: {ZONES[zc]['short']}", "Agricultural zone, Zambia"
+    rows_d = D[D["district_id"].isin(members)]
+elif is_prov:
     prov = pick[2:]
-    st.query_params.pop("district", None)
     st.query_params["province"] = prov
     from fieldpriority.national.aggregate import province_view, province_id
     recs, M, S_prov, members = province_view(nd, NCFG, prov)
@@ -40,7 +57,6 @@ if is_prov:
     rows_d = D[D["province"] == prov]
 else:
     did = pick[2:]
-    st.query_params.pop("province", None)
     st.query_params["district"] = did
     recs = location_records(nd, did)
     here = F[F["district_id"] == did] if len(F) else F
@@ -84,10 +100,10 @@ with s2:
                            "text/csv", icon=":material/download:", width="stretch")
 
 html_block(f"""<div class="fp-ph"><div style="width:58px;height:58px;border-radius:16px;background:#D9A21B;display:grid;
-place-items:center">{icon("layers" if is_prov else "pin", 32, "#1F4D3A", 2.2)}</div><div style="flex:1"><div style="display:flex;gap:14px;
+place-items:center">{icon("field" if is_zone else "layers" if is_prov else "pin", 32, "#1F4D3A", 2.2)}</div><div style="flex:1"><div style="display:flex;gap:14px;
 align-items:center;flex-wrap:wrap"><h1>{E(name)}</h1><span class="fp-badge lg" style="background:{col};color:#fff;
 padding:6px 15px;border-radius:999px;font-weight:600">{E(lab)}</span></div><div class="meta">
-<span>{icon("layers", 15, "#F2C74E")}{E(sub) if not is_prov else f"{len(members)} districts, Zambia"}</span>
+<span>{icon("layers", 15, "#F2C74E")}{E(sub) if not is_prov else (f"{len(members)} districts" + (", agricultural zone" if is_zone else ", Zambia"))}</span>
 <span>{icon("clock", 15, "#F2C74E")}Season data: {E(per)}</span>
 <span>{icon("field", 15, "#F2C74E")}{len(here)} monitored field(s)</span></div></div></div>""")
 if not nd.available:
@@ -120,26 +136,47 @@ with p1:
     maize = recs.get("maize_share_pct") or {}
     maize_txt = maize.get("display") if maize.get("status") == "ok" else "Not yet available (needs the WorldCereal maize map export)"
     fb = (f"{len(here)} monitored field(s) with digitised boundaries ({', '.join(sorted(set(here['pilot_short'])))} pilot)"
-          if len(here) else f"No field boundaries in the platform for this {'province' if is_prov else 'district'} yet")
+          if len(here) else f"No field boundaries in the platform for this {'zone' if is_zone else 'province' if is_prov else 'district'} yet")
     area = float(rows_d["area_km2"].sum())
     if is_prov:
         cen = rows_d.dissolve().geometry.iloc[0].representative_point()
         lat, lon = cen.y, cen.x
     else:
         lat, lon = float(rows_d.iloc[0]["lat"]), float(rows_d.iloc[0]["lon"])
-    place = (f"<div>Province</div><div>{E(prov)}</div><div>Districts</div><div>{len(members)}</div>" if is_prov else
-             f"<div>Province</div><div>{E(rows_d.iloc[0]['province'])}</div>"
-             f"<div>District</div><div>{E(rows_d.iloc[0]['district'])}</div>")
+    if is_zone:
+        pv = rows_d["province"].value_counts()
+        place = (f"<div>Provinces</div><div>{E(', '.join(f'{p} ({n})' for p, n in pv.items()))}</div>"
+                 f"<div>Districts</div><div>{len(members)}: districts whose largest part lies in this zone</div>")
+    elif is_prov:
+        place = f"<div>Province</div><div>{E(prov)}</div><div>Districts</div><div>{len(members)}</div>"
+    else:
+        place = (f"<div>Province</div><div>{E(rows_d.iloc[0]['province'])}</div>"
+                 f"<div>District</div><div>{E(rows_d.iloc[0]['district'])}</div>")
+    # agricultural zone row
+    zrec = location_records(nd, did).get("agro_zone") if not is_prov else None
+    approx = (nd.report.get("zones") or {}).get("official") is False
+    if is_zone:
+        Zr = ZONES[zc]
+        zone_txt = (f"{Zr['name']}: annual rainfall {Zr['rain']}. {Zr['about']}"
+                    + (" Approximated from rainfall; the official map is not yet loaded." if approx else ""))
+    elif is_prov:
+        zc_counts = {z: len(set(zone_members(nd, z)) & set(members)) for z in zcodes}
+        zone_txt = ", ".join(f"{ZONES[z]['name']}: {n} district(s)" for z, n in zc_counts.items() if n) or \
+            "Not yet available"
+    elif zrec and zrec.get("status") == "ok":
+        zone_txt = zrec["display"] + (" (approximate, from rainfall)" if approx else "")
+    else:
+        zone_txt = "Not yet available (needs October and May rainfall: run the monthly update)"
     html_block(f"""<div class="fp-card"><div class="fp-kv">{place}
 <div>Area</div><div>{area:,.0f} km²</div>
 <div>Central point</div><div>{lat:.4f}, {lon:.4f}</div>
-<div>Agricultural zone</div><div style="color:#7A8590">Not yet in the platform (agro-ecological region map to be added)</div>
+<div>Agricultural zone</div><div>{E(zone_txt)}</div>
 <div>Maize-growing status</div><div>{E(maize_txt)}</div>
 <div>Field boundaries</div><div>{E(fb)}</div>
 <div>Boundary source</div><div class="fp-sub">{E(nd.report.get("boundaries_source", ""))}</div>
 </div></div>""")
 with p2:
-    show_map(build_zambia_map(nd, "rainfall", here, focus=members), height=330)
+    show_map(build_zambia_map(nd, "zones" if is_zone else "rainfall", here, focus=members), height=330)
 
 if is_prov:
     rows = ""
@@ -151,14 +188,15 @@ if is_prov:
         rows += (f'<tr><td><a href="{link("/location", district=r.district_id)}" target="_self"><b>{E(r.district)}</b></a></td>'
                  f'<td>{cell("rainfall_anomaly_pct")}</td><td>{cell("temperature_deviation")}</td>'
                  f'<td>{cell("water_stress")}</td><td><span style="color:{col_d};font-weight:600">{E(lab_d)}</span></td></tr>')
-    with st.expander(f"Districts in {prov} Province ({len(rows_d)}): open any district's own report", expanded=False):
+    with st.expander(f"Districts in {name} ({len(rows_d)}): open any district's own report", expanded=False):
         html_block('<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.88rem">'
                    '<tr style="text-align:left;color:#5E6B63"><th>District</th><th>Rainfall vs normal</th>'
                    '<th>Temperature vs normal</th><th>Water stress</th><th>Assessment</th></tr>' + rows + '</table></div>')
 
 # ================================================================ 2. environmental conditions
 sec(2, "Environmental conditions", f"Season to date ({E(per)}) compared with the same months of the previous "
-    f"{nb} seasons. " + ("Province values are area-weighted averages of its districts" if is_prov else "District averages")
+    f"{nb} seasons. " + (("Zone" if is_zone else "Province") + " values are area-weighted averages of its districts"
+                      if is_prov else "District averages")
     + ": individual farms can differ.")
 c = st.columns(3)
 r_tot = recs.get("rainfall_total") or {}
@@ -294,7 +332,7 @@ else:
     empty(f"No monitored fields and no field reports in {E(name)} yet. Crop identification, growth stage and "
           "photographic evidence come from field visits (KoboToolbox) to monitored fields.")
 veg = recs.get("vegetation_anomaly_pct") or {}
-st.caption(("Province" if is_prov else "District") + " satellite vegetation: " + (veg.get("display") if veg.get("status") == "ok" else
+st.caption(("Zone" if is_zone else "Province" if is_prov else "District") + " satellite vegetation: " + (veg.get("display") if veg.get("status") == "ok" else
            "not yet available (MODIS NDVI district export pending).") + " Crop type at district level: "
            + ("see maize-growing status above." if (recs.get("maize_share_pct") or {}).get("status") == "ok"
               else "not yet mapped."))

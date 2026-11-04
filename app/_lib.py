@@ -941,6 +941,15 @@ LAYERS = {
     "solar": {"label": "Solar potential", "short": "Solar", "ind": "solar_resource", "icon": "sun",
               "what": "Average daily solar energy reaching the ground (resource only, not system suitability)."},
 }
+from fieldpriority.national.zones import REGIONS as ZONES  # noqa: E402
+for _k, _r in ZONES.items():
+    CLASS_COLORS.setdefault(_k, _r["color"])
+LAYERS["zones"] = {"label": "Agricultural zones", "short": "Zones", "ind": "agro_zone", "icon": "field",
+                   "classes": ["I", "II", "III"],
+                   "labels": {k: f"{ZONES[k]['name']}: {ZONES[k]['rain']}" for k in ZONES},
+                   "what": "Agro-ecological regions. Until the official map is loaded they are approximated from "
+                           "rainfall: Region I below 800 mm a year, II 800 to 1,000 mm, III above 1,000 mm."}
+LAYERS = {k: LAYERS[k] for k in ["rainfall", "water", "temperature", "vegetation", "zones", "maize", "solar"]}
 ICONS["sun"] = ('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2'
                 'M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>')
 ICONS["thermo"] = '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0Z"/><path d="M12 9v7"/>'
@@ -976,7 +985,7 @@ def layer_available(nd, key):
 def layer_legend(key, q=None):
     L = LAYERS[key]
     if "classes" in L:
-        items = [(CLASS_COLORS[c], c) for c in L["classes"]]
+        items = [(CLASS_COLORS[c], (L.get("labels") or {}).get(c, c)) for c in L["classes"]]
     elif key == "solar":
         edges = [f"{x:.2f}" for x in (q or [])]
         labs = ([f"< {edges[0]}"] + [f"{a} to {b}" for a, b in zip(edges, edges[1:])] + [f"> {edges[-1]}"]) if edges else []
@@ -1010,11 +1019,20 @@ def build_zambia_map(nd, key, fields=None, focus=None, show_fields=True, height=
                      max_native_zoom=16, max_zoom=18).add_to(m)
     folium.TileLayer(ESRI, attr="Imagery: Esri, Maxar, Earthstar Geographics", name="Satellite", max_native_zoom=17,
                      max_zoom=18).add_to(m)
+    zone_mode = key == "zones" and getattr(nd, "zones", None) is not None and len(nd.zones)
+    if zone_mode:      # the zones themselves (they cross district borders), district outlines on top
+        zg = nd.zones.copy()
+        zg["color"] = zg["region"].map(lambda r: ZONES.get(r, {}).get("color", "#D9D9D9"))
+        zg["label"] = zg["region"].map(lambda r: f"{ZONES[r]['name']} · {ZONES[r]['short']} · {ZONES[r]['rain']}")
+        folium.GeoJson(_json.loads(zg[["region", "label", "color", "geometry"]].to_json()), name="Agricultural zones",
+                       style_function=lambda f: {"fillColor": f["properties"]["color"], "color": "#8B6B4A",
+                                                 "weight": 0.6, "fillOpacity": 0.85},
+                       tooltip=folium.GeoJsonTooltip(["label"], labels=False)).add_to(m)
     fc = _json.loads(g[["district_id", "district", "province", "value", "color", "pop", "geometry"]].to_json())
     gj = folium.GeoJson(
-        fc, name=LAYERS[key]["label"],
-        style_function=lambda f: {"fillColor": f["properties"]["color"], "color": "#FFFFFF", "weight": 0.8,
-                                  "fillOpacity": 0.82},
+        fc, name="Districts" if zone_mode else LAYERS[key]["label"],
+        style_function=(lambda f: {"fillOpacity": 0.0, "color": "#1F4D3A", "weight": 0.7}) if zone_mode else
+        (lambda f: {"fillColor": f["properties"]["color"], "color": "#FFFFFF", "weight": 0.8, "fillOpacity": 0.82}),
         highlight_function=lambda f: {"weight": 2.5, "color": "#1F4D3A", "fillOpacity": 0.9},
         tooltip=folium.GeoJsonTooltip(["district", "value"], aliases=["District", LAYERS[key]["label"]], sticky=True),
         popup=folium.GeoJsonPopup(["pop"], labels=False))
