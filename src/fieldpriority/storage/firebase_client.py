@@ -122,8 +122,9 @@ class FirebaseStore:
             raise RuntimeError("pip install firebase-admin") from e
         cred_path = find_credentials(cred_path)
         if not cred_path:
-            raise RuntimeError("Firebase key not found. Save it as firebase-key.json in the project folder, "
-                               "or set FIREBASE_CRED_PATH, or pass --cred")
+            raise RuntimeError("Firebase key not found. Online (Streamlit Cloud): add it under Manage app > Settings > "
+                               "Secrets as a [firebase] section (make_streamlit_secrets.bat makes the text). On a PC: save "
+                               "it as firebase-key.json in the project folder, or set FIREBASE_CRED_PATH.")
         if not firebase_admin._apps:
             firebase_admin.initialize_app(credentials.Certificate(cred_path))
         return cls(firestore.client(), default_prefix() if prefix is None else prefix)

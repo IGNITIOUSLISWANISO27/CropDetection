@@ -136,6 +136,7 @@ def get_repository(source="auto", outputs_dir="outputs", cred=None, store=None):
             if source == "firebase":
                 raise
     elif source == "firebase":
-        raise RuntimeError("Firebase key not found. Save it as firebase-key.json in the project folder, "
-                           "or set FIREBASE_CRED_PATH.")
+        raise RuntimeError("Firebase key not found. Online (Streamlit Cloud): add it under Manage app > Settings > "
+                           "Secrets as a [firebase] section (make_streamlit_secrets.bat makes the text). On a PC: save "
+                           "it as firebase-key.json in the project folder, or set FIREBASE_CRED_PATH.")
     return LocalRepository(outputs_dir)
