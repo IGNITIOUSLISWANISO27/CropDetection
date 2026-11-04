@@ -6,7 +6,10 @@ shapely
 pyproj
 pyyaml
 pytest
-streamlit>=1.50
+streamlit>=1.55
 folium
 altair
 firebase-admin          # Firebase sync and the online dashboard
+reportlab
+openpyxl
+matplotlib

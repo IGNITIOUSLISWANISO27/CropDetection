@@ -23,6 +23,7 @@ class DashboardData:
     metrics: dict = field(default_factory=dict)
     report: dict = field(default_factory=dict)
     meta: dict = field(default_factory=dict)
+    ledger: pd.DataFrame = None          # every prediction ever issued (alerts_issued, rule 10): field history
 
 
 def flatten_assessments(docs):
@@ -87,6 +88,7 @@ class LocalRepository:
             monthly=self._csv("indicators_monthly.csv"), season=self._csv("indicators_season.csv"),
             queue=self._csv("verification_queue.csv"), verifications=ver,
             metrics=self._json("validation_metrics.json", {}), report=self._json("pipeline_report.json", {}),
+            ledger=self._csv("alerts_issued.csv"),
             meta={"period": a0.get("period"), "assessed_at": a0.get("assessed_at"),
                   "model_version": a0.get("model_version"), "alert_date": a0.get("alert_date"),
                   "assessment_date": a0.get("assessment_date")})
@@ -117,6 +119,7 @@ class FirebaseRepository:
             verifications=pd.DataFrame(ver).drop(columns=["_doc_id"], errors="ignore") if ver else _empty([]),
             metrics=s.read_doc("metrics", "validation_latest"),
             report=sorted(runs, key=lambda r: str(r.get("run_at")))[-1] if runs else {},
+            ledger=pd.DataFrame(s.read("alerts_issued")).drop(columns=["_doc_id"], errors="ignore"),
             meta=s.read_doc("meta", "latest"))
 
 
