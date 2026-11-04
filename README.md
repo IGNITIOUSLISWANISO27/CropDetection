@@ -8,6 +8,41 @@ GEE rasters + QGIS polygons -> Ingest -> Features -> Scoring -> Explain -> outpu
                                                                        Kobo form -> validate ----^
 ```
 
+## Zambia agricultural intelligence (district layers), from November 2026
+The dashboard now opens on a Zambia-wide view (Integrated Agricultural & Environmental Intelligence brief, Priority 1):
+a map of all 116 districts with switchable layers, a six-indicator summary, and a **location report** per district
+(profile, environmental conditions, crop condition and verification, integrated interpretation, practical
+considerations). The pilot fields (Solwezi, Chongwe) sit inside it under *Pilot fields*.
+
+| Layer | Source | Status |
+|---|---|---|
+| Rainfall anomaly | CHIRPS v3.0 monthly, 5 km, district mean vs the same months of the 10 previous seasons | live |
+| Temperature | NASA POWER (MERRA-2), about 50 km, district central point | live |
+| Solar resource | NASA POWER (CERES), annual mean, kWh/m2/day | live (resource only) |
+| Water stress | rules on rainfall + temperature (Low confidence) until SMAP soil moisture is imported | indication |
+| Vegetation, soil moisture, maize areas | Earth Engine export by Person 1: `gee/district_layers.js` -> `data/national/gee_district_layers.csv` | waiting for the export |
+| Local observations | KoboToolbox visits of the pilot fields | live |
+
+Every value is an **indicator record** (`src/fieldpriority/evidence.py`): value, unit, source, period, resolution,
+coverage, kind of data (measured / satellite estimate / model estimate / field observation / derived) and confidence.
+Missing layers are shown as *Not yet available* with the reason, never as a number. Wording thresholds:
+`config/national.yaml` (provisional). Interpretation rules: `src/fieldpriority/national/interpret.py`
+(cautious wording: "may indicate", never "drought has damaged").
+
+| Step | How |
+|---|---|
+| Monthly update (everything) | `monthly_update.bat`: district layers for the current season to date, Solwezi moves to the newest Jan-Apr months (Chongwe stays archived), Kobo check, Firebase sync |
+| Schedule it | `setup_monthly_task.bat` (Windows task, 22nd of each month, 10:00) |
+| District layers only | `update_districts.bat` (`python -m fieldpriority.national.build [--period 2025-11..2026-04] [--offline]`) |
+| Earth Engine layers | Person 1 uploads `gee/zambia_districts_for_gee.zip` as an asset, runs `gee/district_layers.js`, saves the CSV as `data/national/gee_district_layers.csv`, then `update_districts.bat` |
+
+The season moves by itself: before the first month of a new season has data (early November) the last full season
+(Nov-Apr) is shown; from late December the new season to date. CHIRPS months are saved as small Zambia-only files in
+`data/national/chirps/`, NASA POWER values in `data/national/power_monthly.csv`; only missing months are downloaded.
+A pilot's moved season is recorded in `data/<pilot>/current_season.json` (delete it to go back to settings.yaml).
+District boundaries: geoBoundaries gbOpen ADM2 (`config/zambia_districts.geojson`). Note: two Chongwe pilot fields
+(F001, F002) fall inside Rufunsa district on these boundaries.
+
 ## Current pilot: Solwezi (North-Western Province), from November 2026
 The project now runs on the Solwezi Earth Engine exports. The earlier Chongwe pilot (5 fields, Jan-Mar 2025,
 2024/2025 backtests) is retired: its outputs and original alert ledger are kept unchanged in `outputs/chongwe_archive/`,

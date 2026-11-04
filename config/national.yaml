@@ -1,0 +1,65 @@
+# Zambia-wide district layers (Integrated Agricultural & Environmental Intelligence, Priority 1).
+# Built by: python -m fieldpriority.national.build   (monthly_update.bat runs it every month)
+# Every threshold here is PROVISIONAL and only decides wording and map colours. It never changes the
+# field-level drought rules in settings.yaml.
+country: Zambia
+boundaries: config/zambia_districts.geojson     # geoBoundaries gbOpen ZMB ADM2 (116 districts) + province
+boundaries_source: "geoBoundaries gbOpen, Zambia districts (ADM2), simplified to about 400 m"
+data_dir: data/national                         # small Zambia-only rasters and downloaded tables (cache)
+output_dir: outputs/national
+
+# Season: the rainy season runs Nov-Apr. The update uses the most recent months that have data:
+# the current season to date, or, before the first month of a season is complete, the last full season.
+season:
+  months: [11, 12, 1, 2, 3, 4]                  # in season order; Nov and Dec belong to the season's first year
+  min_months: 1                                 # a season needs at least this many complete months to be shown
+  baseline_years: 10                            # the same months of the 10 seasons before
+  data_lag_days: 20                             # a month counts as available this many days after it ends
+# period: "2025-01..2025-04"                    # fix the period by hand (otherwise chosen automatically)
+
+sources:
+  rainfall:
+    name: "CHIRPS v3.0 monthly rainfall"
+    url: "https://data.chc.ucsb.edu/products/CHIRPS/v3.0/monthly/global/tifs"
+    resolution: "0.05 degree (about 5 km) cells, district mean"
+    data_type: satellite_estimate               # satellite + rain-gauge blend
+  temperature:
+    name: "NASA POWER (MERRA-2 reanalysis), 2 m air temperature"
+    url: "https://power.larc.nasa.gov/api/temporal/monthly/point"
+    resolution: "about 50 km grid cell"
+    data_type: model_output
+  solar:
+    name: "NASA POWER (CERES SYN1deg), all-sky surface solar radiation"
+    url: "https://power.larc.nasa.gov/api/temporal/monthly/point"
+    resolution: "1 degree (about 110 km) grid cell"
+    data_type: satellite_estimate
+  vegetation:
+    name: "MODIS MOD13Q1 NDVI, 250 m (Earth Engine export by Person 1)"
+    data_type: satellite_estimate
+  soil_moisture:
+    name: "SMAP L4 root-zone soil moisture, about 9 km (Earth Engine export by Person 1)"
+    data_type: model_output
+  cropland:
+    name: "ESA WorldCereal 2021 maize / ESA WorldCover 2021 cropland (Earth Engine export by Person 1)"
+    data_type: satellite_estimate
+
+classes:
+  rainfall_pct:            # season-to-date rainfall vs the baseline mean, percent difference
+    very_dry: -30
+    dry: -15
+    wet: 15
+  temperature_c:           # mean temperature minus the baseline mean of the same months
+    much_warmer: 1.0
+    warmer: 0.5
+    cooler: -0.5
+  heat_days_tmax_c: 32     # monthly mean of daily maximum above this counts as heat exposure for maize
+  vegetation_pct:          # NDVI vs its multi-year mean for the same months
+    much_below: -15
+    below: -7
+  soil_moisture_pct:       # root-zone soil moisture vs its multi-year mean
+    much_below: -20
+    below: -10
+  maize_share_pct: 5       # at least this % of the district's land under maize counts as maize-growing
+
+firebase:
+  collection_prefix: national_

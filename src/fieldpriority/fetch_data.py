@@ -185,7 +185,9 @@ def chirps3_month(y, m, bounds, cache=None):
     env = dict(GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR", GDAL_HTTP_MAX_RETRY="4", GDAL_HTTP_RETRY_DELAY="2",
                CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif")
     url = f"{CHIRPS3_URL}/chirps-v3.0.{y}.{m:02d}.tif"
-    if cache is not None and CHIRPS_MODE["mode"] == "download":
+    if cache is not None and (Path(cache) / f"chirps-v3.0.{y}.{m:02d}.tif").exists():
+        url = str(Path(cache) / f"chirps-v3.0.{y}.{m:02d}.tif")          # already downloaded: always reuse
+    elif cache is not None and CHIRPS_MODE["mode"] == "download":
         local = Path(cache) / f"chirps-v3.0.{y}.{m:02d}.tif"
         try:
             if not local.exists():

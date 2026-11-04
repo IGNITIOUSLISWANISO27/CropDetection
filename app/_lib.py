@@ -424,10 +424,10 @@ def field_location(data, fid):
             "geom_type": g.geom_type, "valid": bool(g.is_valid)}
 
 
-def link(path, **params):
+def link(path, area=None, **params):
     """In-app link that keeps the chosen pilot area (a plain link opens a new session)."""
     from urllib.parse import urlencode
-    q = {**{k: v for k, v in params.items() if v is not None}, "area": current_pilot()}
+    q = {**{k: v for k, v in params.items() if v is not None}, "area": area or current_pilot()}
     return E(f"{path}?{urlencode(q)}")
 
 
@@ -695,10 +695,11 @@ def feature_cards():
 def footer():
     return (f'<div class="fp-foot"><div style="display:flex;gap:12px;align-items:center">{LOGO.format(s=42)}'
             f'<div><div style="font:800 1.15rem var(--fh);color:#fff">FieldPriority</div>'
-            f'<div style="color:#CFE0D3;font-size:.8rem">Agricultural Intelligence</div></div></div>'
-            f'<div class="fp-foot-tag">Smarter Decisions. Stronger Harvests.</div>'
-            f'<div style="color:#CFE0D3;font-size:.82rem">{E(CFG["pilot_area"])}<br>Data: Sentinel-2 · CHIRPS · '
-            f'soil-moisture and temperature grids · KoboToolbox</div></div>')
+            f'<div style="color:#CFE0D3;font-size:.8rem">Agricultural &amp; Environmental Intelligence</div></div></div>'
+            f'<div class="fp-foot-tag">Understanding conditions. Supporting better decisions.</div>'
+            f'<div style="color:#CFE0D3;font-size:.82rem">Zambia · maize first · pilots: '
+            f'{E(", ".join(_cfg(p)["pilot_short"] for p in PILOTS))}<br>Data: CHIRPS · NASA POWER · Sentinel-2 · '
+            f'SMAP · ERA5-Land · geoBoundaries · KoboToolbox</div></div>')
 
 
 CSS_V2 = """
@@ -794,3 +795,397 @@ def kobo_photo(url):
             return r.read()
     except Exception:
         return None
+
+
+# ================================================================ Zambia intelligence (district layers, all pilots)
+from fieldpriority.evidence import DATA_TYPES                       # noqa: E402
+from fieldpriority.national import load_national_config, MON as NMON  # noqa: E402
+from fieldpriority.national.interpret import (CLASS_COLORS, LEVELS, STRESS_ORDER, interpret)  # noqa: E402
+
+NCFG = load_national_config()
+
+
+@st.cache_data(ttl=300, show_spinner="Loading district layers")
+def _load_national(source, out_dir=None):
+    from fieldpriority.national.store import load
+    return load(source, out_dir=out_dir)
+
+
+def national():
+    """District layers (NationalData). Same source rule as the pilot data (Firebase online, local files on a PC)."""
+    try:
+        return _load_national(st.session_state.get("source", os.environ.get("FIELDPRIORITY_SOURCE", "auto")),
+                              os.environ.get("FIELDPRIORITY_NATIONAL_OUTPUTS"))
+    except Exception as e:
+        from fieldpriority.national.store import NationalData, _districts
+        return NationalData(_districts(NCFG), source_note=f"District layers could not be loaded ({e})")
+
+
+def pilot_data(p):
+    """Data of one pilot area (cached), or None when it has no outputs yet."""
+    c = _cfg(p)
+    env_out = os.environ.get("FIELDPRIORITY_OUTPUTS")
+    outputs = env_out.replace("{pilot}", p) if env_out else str(ROOT / c["paths"]["output_dir"])
+    try:
+        return _load(st.session_state.get("source", os.environ.get("FIELDPRIORITY_SOURCE", "auto")), outputs, None,
+                     (c.get("firebase") or {}).get("collection_prefix", ""))
+    except Exception:
+        return None
+
+
+def monitored_fields(nd=None):
+    """Every assessed field of every pilot area, with its district (from the boundary file) and its visits."""
+    import geopandas as gpd
+    rows = []
+    for p in PILOTS:
+        d = pilot_data(p)
+        if d is None or d.assessments is None or d.assessments.empty:
+            continue
+        stat = status_by_field(d)
+        v = visits(d)
+        geo = d.fields.set_index("Field_ID")
+        for r in d.assessments.to_dict("records"):
+            fid = r["field_id"]
+            if fid not in geo.index:
+                continue
+            pt = geo.loc[fid].geometry.representative_point()
+            mine = v[v["field_id_pipeline"] == fid] if len(v) and "field_id_pipeline" in v else pd.DataFrame()
+            approved = int(mine["analysis_eligible"].fillna(False).astype(bool).sum()) if len(mine) else 0
+            photos = int(sum(len(attachments(x)) for x in mine.to_dict("records"))) if len(mine) else 0
+            rows.append({"pilot": p, "pilot_short": _cfg(p)["pilot_short"], "field_id": fid, "lat": pt.y,
+                         "lon": pt.x, "risk_level": r["risk_level"], "outcome": r["outcome"],
+                         "data_confidence": r["data_confidence"], "verification": stat.get(fid, "Not yet verified"),
+                         "visits": len(mine), "approved": approved, "photos": photos, "period": r.get("period"),
+                         "area_ha": float(geo.loc[fid, "area_ha"]), "growth_stage": r.get("growth_stage_label"),
+                         "water_deficit": r.get("water_deficit"), "vegetation_decline": r.get("vegetation_decline")})
+    f = pd.DataFrame(rows)
+    if f.empty:
+        return f.assign(district_id=[], district=[])
+    nd = nd or national()
+    g = gpd.GeoDataFrame(f, geometry=gpd.points_from_xy(f["lon"], f["lat"]), crs=4326)
+    j = gpd.sjoin(g, nd.districts[["district_id", "district", "province", "geometry"]], how="left", predicate="within")
+    return pd.DataFrame(j.drop(columns=["geometry", "index_right"], errors="ignore"))
+
+
+def location_records(nd, district_id):
+    """{indicator: record} for one district."""
+    if not nd.available:
+        return {}
+    t = nd.indicators[nd.indicators["location_id"] == district_id]
+    return {r["indicator"]: {k: (None if (isinstance(v, float) and v != v) else v) for k, v in r.items()}
+            for r in t.to_dict("records")}
+
+
+def period_of(nd):
+    return nd.report.get("period_label") or "the latest period"
+
+
+TYPE_STYLE = {"measurement": ("#E3EEF9", "#1F4E80"), "satellite_estimate": ("#E3EEF9", "#1F4E80"),
+              "model_output": ("#FFF1D6", "#7A5300"), "field_observation": ("#EDE6F7", "#4B2F7A"),
+              "derived": ("#E8F1EA", "#1F4D3A")}
+
+
+def type_tag(data_type):
+    bg, fg = TYPE_STYLE.get(data_type, ("#EEE", "#333"))
+    lab = DATA_TYPES.get(data_type, (data_type, ""))[0]
+    return f'<span class="fp-src" style="background:{bg};color:{fg}">{E(lab)}</span>'
+
+
+def conf_tag(conf):
+    col = {"High": "#2E8B57", "Medium": "#C8930F", "Low": "#B9342B"}.get(conf, "#7A8590")
+    return (f'<span class="fp-src" style="background:{col}1A;color:{col}">Confidence: {E(conf)}</span>'
+            if conf else "")
+
+
+def evidence_line(rec):
+    """Source · period · resolution · coverage, for under a value."""
+    if not rec or rec.get("status") != "ok":
+        return E((rec or {}).get("quality_note") or "Not yet available")
+    parts = [rec.get("source"), rec.get("period_label") and f"Period: {rec['period_label']}",
+             rec.get("resolution"), rec.get("coverage")]
+    if rec.get("baseline"):
+        parts.append("Normal = " + rec["baseline"])
+    return E(" · ".join(str(x) for x in parts if x))
+
+
+def class_chip(cls):
+    if not cls:
+        return ""
+    col = CLASS_COLORS.get(cls, "#E9E4D4")
+    dark = col in ("#E9E4D4", "#EBC46A", "#9CC79A", "#FFF3C4", "#FBD98A", "#F1F5E6", "#CFE3B0")
+    return (f'<span style="display:inline-block;padding:2px 9px;border-radius:999px;font:600 .78rem Inter,sans-serif;'
+            f'background:{col};color:{"#1E2A24" if dark else "#fff"}">{E(cls)}</span>')
+
+
+# ---------------------------------------------------------------- map layers
+SOLAR_COLORS = ["#FFF3C4", "#FBD98A", "#F5B94F", "#E7932A", "#C96F12"]
+MAIZE_BINS, MAIZE_COLORS = [0, 2, 5, 10, 20], ["#F1F5E6", "#CFE3B0", "#9CC77A", "#5E9E4B", "#2E6B35"]
+LAYERS = {
+    "rainfall": {"label": "Rainfall anomaly", "short": "Rainfall", "ind": "rainfall_anomaly_pct", "icon": "drop",
+                 "classes": ["Very dry", "Drier than normal", "Near normal", "Wetter than normal"],
+                 "what": "Season-to-date rainfall compared with the same months of the 10 previous seasons."},
+    "water": {"label": "Water stress", "short": "Water stress", "ind": "water_stress", "icon": "drop", "classes": STRESS_ORDER,
+              "what": "Where water-related stress may be emerging. Until soil moisture is imported this is an "
+                      "indication from rainfall and temperature only (low confidence)."},
+    "temperature": {"label": "Temperature", "short": "Temperature", "ind": "temperature_deviation", "icon": "gauge",
+                    "classes": ["Much warmer than normal", "Warmer than normal", "Near normal", "Cooler than normal"],
+                    "what": "Mean temperature compared with the same months of the 10 previous seasons."},
+    "vegetation": {"label": "Vegetation condition", "short": "Vegetation", "ind": "vegetation_anomaly_pct", "icon": "leaf",
+                   "classes": ["Well below normal", "Below normal", "Near or above normal"],
+                   "what": "Satellite greenness (MODIS NDVI) of cropland compared with earlier seasons."},
+    "maize": {"label": "Maize-growing areas", "short": "Maize areas", "ind": "maize_share_pct", "icon": "field",
+              "what": "Share of each district's land mapped as maize (ESA WorldCereal 2021)."},
+    "solar": {"label": "Solar potential", "short": "Solar", "ind": "solar_resource", "icon": "sun",
+              "what": "Average daily solar energy reaching the ground (resource only, not system suitability)."},
+}
+ICONS["sun"] = ('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2'
+                'M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>')
+ICONS["thermo"] = '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0Z"/><path d="M12 9v7"/>'
+
+
+def layer_values(nd, key):
+    """district_id -> (color, display text, class/value). Pending districts are grey."""
+    L = LAYERS[key]
+    t = nd.indicators[nd.indicators["indicator"] == L["ind"]] if nd.available else pd.DataFrame()
+    out = {}
+    vals = pd.to_numeric(t[t["status"] == "ok"]["value"], errors="coerce").dropna() if len(t) else pd.Series(dtype=float)
+    q = list(np.quantile(vals, [0.2, 0.4, 0.6, 0.8])) if key == "solar" and len(vals) else []
+    for r in t.to_dict("records"):
+        if r.get("status") != "ok":
+            out[r["location_id"]] = ("#D9D9D9", "Not yet available", None)
+            continue
+        if "classes" in L:
+            out[r["location_id"]] = (CLASS_COLORS.get(r.get("class"), "#E9E4D4"), r.get("display"), r.get("class"))
+        elif key == "solar":
+            i = int(np.searchsorted(q, float(r["value"]), side="right"))
+            out[r["location_id"]] = (SOLAR_COLORS[i], r.get("display"), float(r["value"]))
+        else:
+            i = max(0, int(np.searchsorted(MAIZE_BINS, float(r["value"]), side="right")) - 1)
+            out[r["location_id"]] = (MAIZE_COLORS[i], r.get("display"), float(r["value"]))
+    return out, q
+
+
+def layer_available(nd, key):
+    t = nd.indicators[nd.indicators["indicator"] == LAYERS[key]["ind"]] if nd.available else pd.DataFrame()
+    return bool(len(t) and (t["status"] == "ok").any())
+
+
+def layer_legend(key, q=None):
+    L = LAYERS[key]
+    if "classes" in L:
+        items = [(CLASS_COLORS[c], c) for c in L["classes"]]
+    elif key == "solar":
+        edges = [f"{x:.2f}" for x in (q or [])]
+        labs = ([f"< {edges[0]}"] + [f"{a} to {b}" for a, b in zip(edges, edges[1:])] + [f"> {edges[-1]}"]) if edges else []
+        items = list(zip(SOLAR_COLORS, [l + " kWh/m²/day" for l in labs]))
+    else:
+        labs = [f"{a} to {b}%" for a, b in zip(MAIZE_BINS, MAIZE_BINS[1:])] + [f"over {MAIZE_BINS[-1]}%"]
+        items = list(zip(MAIZE_COLORS, labs))
+    items.append(("#D9D9D9", "Not yet available"))
+    return items
+
+
+def build_zambia_map(nd, key, fields=None, focus=None, show_fields=True, height=520):
+    """Districts coloured by one indicator layer, plus the monitored fields and field observations on top."""
+    import json as _json
+    from branca.element import Element
+    vals, q = layer_values(nd, key)
+    g = nd.districts.copy()
+    g["color"] = g["district_id"].map(lambda d: vals.get(d, ("#D9D9D9",))[0])
+    g["value"] = g["district_id"].map(lambda d: vals.get(d, (None, "Not yet available"))[1] or "")
+    g["pop"] = [
+        f'<div style="font:13px Inter,sans-serif;min-width:200px"><div style="font-weight:700;font-size:15px">'
+        f'{E(r.district)}</div><div style="color:#5E6B63">{E(r.province)} Province</div>'
+        f'<div style="margin:6px 0">{E(LAYERS[key]["label"])}: <b>{E(str(r.value))}</b></div>'
+        f'<a href="{link("/location", district=r.district_id)}" target="_top" style="display:inline-block;'
+        f'background:#1F4D3A;color:#fff;padding:6px 11px;border-radius:8px;text-decoration:none">Open location report</a></div>'
+        for r in g.itertuples()]
+    m = folium.Map(location=[-13.4, 27.8], zoom_start=6, tiles=None, control_scale=True, max_zoom=18,
+                   min_zoom=5)
+    folium.TileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+                     attr="Base map: Esri, HERE, Garmin, © OpenStreetMap contributors", name="Light map",
+                     max_native_zoom=16, max_zoom=18).add_to(m)
+    folium.TileLayer(ESRI, attr="Imagery: Esri, Maxar, Earthstar Geographics", name="Satellite", max_native_zoom=17,
+                     max_zoom=18).add_to(m)
+    fc = _json.loads(g[["district_id", "district", "province", "value", "color", "pop", "geometry"]].to_json())
+    gj = folium.GeoJson(
+        fc, name=LAYERS[key]["label"],
+        style_function=lambda f: {"fillColor": f["properties"]["color"], "color": "#FFFFFF", "weight": 0.8,
+                                  "fillOpacity": 0.82},
+        highlight_function=lambda f: {"weight": 2.5, "color": "#1F4D3A", "fillOpacity": 0.9},
+        tooltip=folium.GeoJsonTooltip(["district", "value"], aliases=["District", LAYERS[key]["label"]], sticky=True),
+        popup=folium.GeoJsonPopup(["pop"], labels=False))
+    gj.add_to(m)
+    if focus is not None:
+        fg = g[g["district_id"] == focus]
+        folium.GeoJson(_json.loads(fg[["geometry"]].to_json()), name="Selected district",
+                       style_function=lambda f: {"fill": False, "color": "#14233A", "weight": 3}).add_to(m)
+    if show_fields and fields is not None and len(fields):
+        grp = folium.FeatureGroup(name="Monitored fields (risk class)", show=True)
+        obs = folium.FeatureGroup(name="Field observations (KoboToolbox)", show=True)
+        for r in fields.itertuples():
+            rk = RISK.get(r.risk_level, {"color": "#7A8590", "short": r.risk_level})
+            pop = (f'<div style="font:13px Inter,sans-serif;min-width:200px"><b>Field {E(str(r.field_id))}</b> · '
+                   f'{E(r.pilot_short)} pilot<div style="margin:5px 0">{badge(r.risk_level)}</div>'
+                   f'<div style="color:#5E6B63">{E(str(r.verification))} · {r.visits} visit(s), {r.photos} photo(s)</div>'
+                   f'<a href="{link("/assessments", area=r.pilot, field=str(r.field_id))}" target="_top" '
+                   f'style="display:inline-block;margin-top:6px;background:#1F4D3A;color:#fff;padding:5px 10px;'
+                   f'border-radius:8px;text-decoration:none">Open field profile</a></div>')
+            folium.CircleMarker([r.lat, r.lon], radius=7, color="#FFFFFF", weight=2, fill=True, fill_color=rk["color"],
+                                fill_opacity=1, tooltip=f"Field {r.field_id} · {rk['short']}",
+                                popup=folium.Popup(pop, max_width=280)).add_to(grp)
+            if r.visits:
+                folium.Marker([r.lat, r.lon], tooltip=f"{r.visits} field visit(s), {r.approved} approved",
+                              icon=folium.DivIcon(icon_size=(22, 22), icon_anchor=(-4, 24), html=(
+                                  f'<div style="width:22px;height:22px;border-radius:6px;background:#6A4C93;color:#fff;'
+                                  f'font:700 11px/22px Inter,sans-serif;text-align:center;border:1.5px solid #fff;'
+                                  f'box-shadow:0 1px 3px rgba(0,0,0,.4)">{r.visits}</div>'))).add_to(obs)
+        grp.add_to(m)
+        obs.add_to(m)
+    folium.LayerControl(position="topright", collapsed=True).add_to(m)
+    rows = "".join(f'<div style="display:flex;align-items:center;gap:7px;margin:2px 0"><span style="width:13px;height:13px;'
+                   f'border-radius:3px;background:{c};border:1px solid #CFC6B2"></span>{E(t)}</div>'
+                   for c, t in layer_legend(key, q))
+    extra = ('<div style="margin-top:5px;border-top:1px solid #E3DDCF;padding-top:4px"><span style="display:inline-block;'
+             'width:11px;height:11px;border-radius:50%;background:#2E8B57;border:2px solid #fff;box-shadow:0 0 0 1px #999;'
+             'vertical-align:-1px"></span> Monitored field &nbsp;<span style="display:inline-block;width:12px;height:12px;'
+             'border-radius:3px;background:#6A4C93;vertical-align:-1px"></span> Field visits</div>') if show_fields else ""
+    m.get_root().html.add_child(Element(
+        f'<div style="position:absolute;left:10px;bottom:24px;z-index:999;background:rgba(255,255,255,.95);'
+        f'border-radius:10px;padding:8px 11px;font:12px Inter,Segoe UI,sans-serif;color:#1E2A24;max-width:230px;'
+        f'box-shadow:0 2px 8px rgba(0,0,0,.25)"><b>{E(LAYERS[key]["label"])}</b>{rows}{extra}</div>'))
+    if focus is not None:
+        b = g[g["district_id"] == focus].total_bounds
+        m.fit_bounds([[b[1], b[0]], [b[3], b[2]]], padding=(20, 20))
+    else:
+        m.fit_bounds([[-18.1, 21.99], [-8.2, 33.7]], padding=(6, 6))
+    return m
+
+
+# ---------------------------------------------------------------- headline numbers (live data only)
+def national_summary(nd, fields):
+    """The six intelligence indicators for the homepage: value, label, note, evidence tags. No invented figures."""
+    I = nd.indicators if nd.available else pd.DataFrame(columns=["indicator", "status", "value", "class"])
+    per = period_of(nd)
+
+    def ok(ind):
+        t = I[(I["indicator"] == ind) & (I["status"] == "ok")]
+        return t.assign(value=pd.to_numeric(t["value"], errors="coerce")) if ind != "water_stress" else t
+
+    n = len(nd.districts)
+    out = []
+    # crop condition
+    veg = ok("vegetation_anomaly_pct")
+    nf = len(fields)
+    stress = int(fields["risk_level"].isin(["High", "Moderate", "Not attributed"]).sum()) if nf else 0
+    watch = int((fields["risk_level"] == "Watch").sum()) if nf else 0
+    if len(veg):
+        below = int(veg["class"].isin(["Below normal", "Well below normal"]).sum())
+        out.append(("leaf", f"{below}", f"of {len(veg)} districts", "Crop & vegetation",
+                    f"Cropland greenness below normal, {per}. Monitored fields with a crop-stress flag: {stress} of {nf}.",
+                    "satellite_estimate", "Medium"))
+    else:
+        out.append(("leaf", f"{stress}" if nf else "–", f"of {nf} monitored fields with crop stress" if nf
+                    else "No fields yet", "Crop & vegetation",
+                    f"High, Moderate or cause-uncertain from Sentinel-2 greenness and the drought rules. {watch} on "
+                    "Watch (water shortage, crop not yet reacting). District greenness layer not yet imported.",
+                    "derived", "Low"))
+    rain = ok("rainfall_anomaly_pct")
+    if len(rain):
+        dry = int(rain["class"].isin(["Very dry", "Drier than normal"]).sum())
+        wet = int((rain["class"] == "Wetter than normal").sum())
+        out.append(("drop", f"{dry}", f"of {len(rain)} districts drier than normal", "Rainfall",
+                    f"Season to date ({per}) vs the 10 previous seasons. Median {rain['value'].median():+.0f}%; "
+                    f"{wet} wetter than normal.", "satellite_estimate", "High"))
+    else:
+        out.append(("drop", "–", "Not yet available", "Rainfall", "Run the monthly update.", "derived", ""))
+    tmp = ok("temperature_deviation")
+    if len(tmp):
+        warm = int(tmp["class"].isin(["Warmer than normal", "Much warmer than normal"]).sum())
+        out.append(("thermo", f"{warm}", f"of {len(tmp)} districts warmer than normal", "Temperature",
+                    f"Median deviation {tmp['value'].median():+.1f} °C, {per}.", "model_output", "Medium"))
+    else:
+        out.append(("thermo", "–", "Not yet available", "Temperature", "Run the monthly update.", "derived", ""))
+    ws = ok("water_stress")
+    if len(ws):
+        k = int(ws["class"].isin(["Likely water stress", "Possible water stress"]).sum())
+        early = int((ws["class"] == "Early sign: rainfall deficit").sum())
+        lowc = (ws["confidence"] == "Low").all()
+        out.append(("drop", f"{k}", "districts with possible water stress", "Water stress",
+                    f"{early} more with an early rainfall-deficit sign. "
+                    + ("Rainfall and temperature only; soil moisture not yet included." if lowc else
+                       "Soil moisture and rainfall."), "derived", "Low" if lowc else "Medium"))
+    else:
+        out.append(("drop", "–", "Not yet available", "Water stress", "", "derived", ""))
+    vis = int(fields["visits"].sum()) if nf else 0
+    appr = int(fields["approved"].sum()) if nf else 0
+    ph = int(fields["photos"].sum()) if nf else 0
+    out.append(("camera", f"{appr}", "verified field reports", "Local observations",
+                f"{vis} real field visit(s) received through KoboToolbox, {ph} photo(s), across "
+                f"{fields[fields['visits'] > 0]['pilot'].nunique() if nf else 0} pilot area(s).", "field_observation", "High" if appr else "Low"))
+    sol = ok("solar_resource")
+    if len(sol):
+        out.append(("sun", f"{sol['value'].median():.1f}", "kWh/m² per day (median)", "Solar potential",
+                    f"Range {sol['value'].min():.1f} to {sol['value'].max():.1f} across districts, "
+                    f"{sol['period_label'].iloc[0]}. Resource only.", "satellite_estimate", "Medium"))
+    else:
+        out.append(("sun", "–", "Not yet available", "Solar potential", "", "derived", ""))
+    return out
+
+
+def intel_summary_html(items, updated=None):
+    cells = "".join(
+        f'<div class="fp-in-cell"><div class="fp-in-top"><span class="fp-in-ic">{icon(ic, 20)}</span>'
+        f'<span class="fp-in-t">{E(title)}</span></div><div class="fp-in-v">{E(v)}</div>'
+        f'<div class="fp-in-l">{E(lab)}</div><div class="fp-in-n">{E(note)}</div>'
+        f'<div style="margin-top:6px">{type_tag(dt_)}{conf_tag(conf)}</div></div>'
+        for ic, v, lab, title, note, dt_, conf in items)
+    up = f'<span class="fp-gl-upd">{icon("clock", 14, "#E8EFE9")} {E(updated)}</span>' if updated else ""
+    return (f'<div class="fp-gl"><div class="fp-gl-head"><span>{icon("gauge", 20, "#F2C74E")} Agricultural '
+            f'Intelligence Summary · Zambia</span>{up}</div><div class="fp-in-row">{cells}</div></div>')
+
+
+CSS_V3 = """
+<style>
+.fp-in-row{display:grid;grid-template-columns:repeat(6,1fr)}
+.fp-in-cell{padding:16px 16px 14px;border-right:1px solid var(--line);display:flex;flex-direction:column}
+.fp-in-cell:last-child{border-right:0}
+.fp-in-top{display:flex;gap:8px;align-items:center;color:var(--forest);font:700 .86rem var(--fh)}
+.fp-in-ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:#E8F1EA;flex:none}
+.fp-in-v{font:800 1.9rem/1.05 var(--fh);color:var(--ink);margin-top:10px}
+.fp-in-l{font-weight:600;color:var(--ink);font-size:.86rem;margin-top:2px}
+.fp-in-n{color:var(--muted);font-size:.78rem;margin-top:5px;line-height:1.35;flex:1}
+.fp-in-cell .fp-src{margin:3px 4px 0 0}
+.fp-hero .chips{display:flex;gap:8px;flex-wrap:wrap;margin:-.2rem 0 1rem}
+.fp-hero .chip{font:700 .72rem var(--fb);letter-spacing:.1em;color:#1E2A24;background:#F2C74E;padding:4px 10px;border-radius:6px}
+.fp-hero .chip.o{background:transparent;color:#F2C74E;border:1px solid rgba(242,199,78,.6)}
+.fp-hero .explore{color:#E8EFE9;font-size:.92rem;margin:0 0 1.1rem}
+.fp-hero .explore b{color:#fff}
+.fp-layers{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:.6rem 0}
+.fp-layer{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 13px;font-size:.84rem}
+.fp-layer .h{display:flex;gap:7px;align-items:center;font:700 .9rem var(--fh);color:var(--ink)}
+.fp-layer .s{margin-top:6px;color:var(--muted);line-height:1.35}
+.fp-layer .st{display:inline-block;margin-top:7px;font:600 .7rem var(--fb);text-transform:uppercase;letter-spacing:.06em;
+  padding:2px 7px;border-radius:6px}
+.fp-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:center;margin:.4rem 0 .2rem}
+.fp-flow .b{background:var(--forest);color:#fff;border-radius:12px;padding:10px 14px;font-size:.84rem}
+.fp-flow .b b{display:block;font:700 .92rem var(--fh);color:#F2C74E}
+.fp-flow .a{color:var(--forest);font-size:1.4rem;font-weight:700}
+.fp-story{background:linear-gradient(120deg,#FFF8E6,#F6E7B8);border:1px solid #F0DCA4;border-radius:16px;padding:18px 22px;
+  color:#4A3A10;margin-top:1.2rem}
+.fp-story h3{margin:0 0 .3rem;color:#1E2A24}
+.fp-rep-h{font:800 1.3rem var(--fh);color:var(--ink);margin:1.8rem 0 .5rem;display:flex;gap:10px;align-items:center}
+.fp-rep-h .n{width:30px;height:30px;border-radius:9px;background:var(--forest);color:#F2C74E;display:grid;place-items:center;
+  font-size:.95rem}
+.fp-ic{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;height:100%}
+.fp-ic .t{display:flex;justify-content:space-between;gap:8px;align-items:center;font:700 .92rem var(--fh);color:var(--ink)}
+.fp-ic .v{font:800 1.45rem var(--fh);color:var(--ink);margin:6px 0 4px}
+.fp-ic .e{color:var(--muted);font-size:.78rem;line-height:1.35;margin-top:6px}
+.fp-interp{background:#fff;border-left:5px solid var(--forest);border-radius:12px;padding:14px 18px;font-size:.98rem;line-height:1.55}
+.fp-att li{margin:6px 0}
+@media (max-width: 1100px){ .fp-in-row,.fp-layers{grid-template-columns:repeat(3,1fr)} .fp-in-cell:nth-child(3){border-right:0}
+  .fp-in-cell{border-bottom:1px solid var(--line)} }
+@media (max-width: 640px){ .fp-in-row,.fp-layers{grid-template-columns:1fr 1fr} .fp-in-cell{border-right:0}
+  .fp-flow{grid-template-columns:1fr} .fp-flow .a{transform:rotate(90deg);justify-self:center} }
+</style>
+"""

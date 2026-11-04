@@ -139,6 +139,12 @@ validation:
   min_decided_for_metrics: 10                # below this, metrics are descriptive only
   require_human_status: true                 # SOP: validation lead assigns Accepted; auto-checks only suggest
 
+monitoring:
+  # monthly_update.bat moves this pilot to the newest Jan-Apr months with published data (Sentinel-2 NDVI,
+  # CHIRPS rainfall, ERA5-Land temperature), records them in <data_dir>/current_season.json and reruns the
+  # assessment. Earlier alerts stay in the ledger (rule 10).
+  auto_update: true
+
 dashboard:
   # Warn on Home when the imagery period ended long before the alert date. Set stale_data_warning to false
   # when the pilot deliberately uses a past season (for example 2025) as its final dataset.

@@ -31,7 +31,9 @@ This PC: run_pipeline / validate_kobo  ->  sync_firebase  ->  Firebase  ->  onli
 
 ## Every update after that
 
-`run_pipeline.bat` (or `fetch_solwezi_monthly.bat`), `validate_kobo.bat`, then **`sync_firebase.bat`**.
+**`monthly_update.bat`** does everything once a month (district layers, Solwezi field data and assessment, Kobo
+check, Firebase sync); `setup_monthly_task.bat` schedules it. For a quick refresh after field visits:
+`validate_kobo.bat`, then **`sync_firebase.bat`** (it also uploads the district layers).
 Code changes on this PC are not online until the changed files are uploaded to the GitHub repository again.
 
 ## Never upload

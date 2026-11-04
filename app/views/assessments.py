@@ -46,6 +46,20 @@ display:grid;place-items:center;color:#1F4D3A">{icon("leaf", 32, "#1F4D3A", 2.2)
         except Exception as e:
             st.caption(f"PDF unavailable: {e}")
 
+    # ---- link to the district's location report (rainfall, temperature, water stress, solar)
+    try:
+        from _lib import national
+        nd = national()
+        pt = data.fields.set_index("Field_ID").loc[fid].geometry.representative_point()
+        hit = nd.districts[nd.districts.contains(pt)]
+        if len(hit):
+            h = hit.iloc[0]
+            st.page_link("views/location.py", icon=":material/location_on:",
+                         label=f"District context: {h['district']} location report (rainfall, temperature, water stress)",
+                         query_params={"district": h["district_id"]})
+    except Exception:
+        pass
+
     # ---- boundary + information + risk card
     g1, g2 = st.columns([1.55, 1], gap="medium")
     with g1:

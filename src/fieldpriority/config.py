@@ -4,6 +4,7 @@ config/pilots/<name>.yaml with only what differs; it is merged over the defaults
 Choose the area with load_config(pilot="chongwe") or the FIELDPRIORITY_PILOT environment variable
 (the .bat files take it as their first argument, e.g. run_pipeline.bat chongwe)."""
 import copy
+import json
 import os
 from pathlib import Path
 
@@ -44,4 +45,11 @@ def load_config(path=None, pilot=None):
             cfg = _merge(cfg, yaml.safe_load(f))
     cfg["pilot_name"] = pilot
     cfg["_root"] = str(ROOT)
+    # monthly_update.py moves a pilot to the newest season with data by writing <data_dir>/current_season.json.
+    # Delete that file to go back to the season in the settings.
+    sf = ROOT / cfg["paths"]["data_dir"] / "current_season.json"
+    if sf.exists() and not os.environ.get("FIELDPRIORITY_IGNORE_SEASON_FILE"):
+        s = json.loads(sf.read_text())
+        cfg["year"], cfg["months"], cfg["period_label"] = int(s["year"]), [int(m) for m in s["months"]], s["period_label"]
+        cfg["season_file"] = str(sf)
     return cfg

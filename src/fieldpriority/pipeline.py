@@ -275,8 +275,14 @@ def main():
                          "Data ending more than rules.max_data_age_days before it gives 'Insufficient data'.")
     ap.add_argument("--firebase", action="store_true")
     ap.add_argument("--cred", default=None)
+    ap.add_argument("--year", type=int, default=None, help="season year to assess (default: settings / current_season.json)")
+    ap.add_argument("--months", type=int, nargs="+", default=None, help="months to assess, e.g. 1 2 3 4")
     a = ap.parse_args()
     cfg = load_config(a.config)
+    if a.year or a.months:
+        cfg["year"] = a.year or cfg["year"]
+        cfg["months"] = sorted(a.months or cfg["months"])
+        cfg["period_label"] = f"{cfg['year']}-{cfg['months'][0]:02d}..{cfg['year']}-{cfg['months'][-1]:02d}"
     root = Path(cfg["_root"])
     data_dir = Path(a.data_dir or root / cfg["paths"]["data_dir"])
     out_dir = Path(a.out_dir or root / cfg["paths"]["output_dir"])

@@ -37,3 +37,6 @@ sources:
 
 validation:
   field_id_map: config/field_id_map_chongwe.csv
+
+monitoring:
+  auto_update: false     # archived first pilot: kept on its Jan-Mar 2025 season (its data folder is an archive)
