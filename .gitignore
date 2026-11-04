@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.env
+*serviceAccount*.json
+firebase-key.json
+data/raw/*.tif
+outputs/
+.pytest_cache/
+keys/
+.streamlit/secrets.toml
+backup_*/
+data/**/_download_cache/
+data/chongwe_archive/
+*.part
+deploy/

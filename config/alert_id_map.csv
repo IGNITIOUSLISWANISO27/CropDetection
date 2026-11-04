@@ -1,0 +1,2 @@
+kobo_alert_id,alert_id,approved_by,approved_on,note
+TEST-001,FP-SLZ-F001-20261103,Ignitias Liswaniso,2026-11-03,"Solwezi visit by EO-01 on 2026-11-03 used TEST-001 / FIELD-001 as IDs for F001; real visit, not a test"

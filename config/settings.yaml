@@ -1,0 +1,148 @@
+# FieldPriority pipeline settings. Every threshold lives here, never in code.
+project: FieldPriority
+pilot_area: Solwezi pilot, North-Western Province, Zambia
+model_version: "0.3.0-solwezi"
+year: 2025
+months: [1, 2, 3, 4]         # Jan-Apr 2025: the second half of the 2024/25 rainy season
+period_label: "2025-01..2025-04"
+
+paths:
+  data_dir: data/solwezi      # filled by: python -m fieldpriority.import_gee --src <GEE export folder>
+  fields_shapefile: Agric_fields_GEE.shp
+  output_dir: outputs/solwezi # the earlier Chongwe outputs and their alert ledger stay untouched in outputs/
+
+fields:
+  id_column: Field_ID
+
+# Provenance, shown on the Method page and in explanations. Edit to match the real products.
+sources:
+  # cell sizes confirmed by Person 1, Nov 2026: rainfall 5 km, temperature 11 km, soil moisture 9 km
+  ndvi: "Sentinel-2 L2A monthly NDVI, 10 m pixels (fetch_solwezi_monthly)"
+  greenness_seasonal: "Sentinel-2 composite"
+  rainfall: "CHIRPS v3.0, about 5 km cell"
+  rainfall_baseline: "CHIRPS 10-year reference mean"
+  soil_moisture: "SMAP L4 root-zone soil moisture, monthly area mean, about 9 km cell"
+  soil_moisture_baseline: "Same month, all earlier years in Solwezi_Monthly_Soil_Moisture (2021-2024)"
+  temperature: "ERA5-Land, about 11 km cell"
+  s1_vv: "Sentinel-1 VV backscatter (dB), 10 m"
+
+extraction:
+  all_touched: true           # include edge pixels; matters for small fields (F005 = 0.4 ha)
+  coarse_res_deg: 0.01        # rasters coarser than this are treated as regional cells
+  ndvi_valid_range: [0.0, 0.95]
+  s1_valid_range_db: [-30.0, 5.0]
+  min_valid_fraction: 0.5     # below this a field-month is flagged as low quality
+  full_support_pixels: 100    # 10 m pixels needed for full size-support in confidence
+
+greenness:
+  # shapefile_NDVI_Mean = existing Jan-Mar median-composite value (recommended, per team workflow)
+  # monthly_mean        = mean of the monthly NDVI rasters
+  seasonal_source: shapefile_NDVI_Mean
+
+scoring:
+  primary_method: cohort_minmax     # replicates the v1 workflow (relative across pilot fields)
+  weights:
+    greenness: 0.25
+    rainfall: 0.25
+    soil_moisture: 0.25
+    temperature: 0.25
+  # PROVISIONAL class thresholds. v1 only produced High/Low; no Moderate field existed.
+  classes:
+    high: 0.50
+    moderate: 0.25
+  # EXPERIMENTAL fixed-reference scoring. Components with null have no defensible fixed
+  # reference until a multi-year baseline exists, so they are excluded and weights renormalised.
+  reference_range:
+    latest_weight: 0.5              # blend of latest-month and seasonal-mean rainfall anomaly
+    greenness: {neutral: 0.70, severe: 0.30, window: latest}      # PROVISIONAL
+    rainfall_anomaly_mm: {neutral: 0.0, severe: -50.0}            # PROVISIONAL
+    soil_moisture: null
+    temperature: null
+
+confidence:
+  # Confidence = how well the data supports the assessment. It is NOT verified accuracy.
+  weights: {agreement: 0.35, data_quality: 0.25, size_support: 0.20, margin: 0.20}
+  labels: {high: 0.80, medium: 0.55}
+  regional_driven_share: 0.80       # flag when >= this share of the score comes from coarse cells
+  regional_penalty: 0.15            # subtracted when the score is mostly regional
+  max_before_validation: 0.85       # ceiling until Kobo-verified results exist
+
+alerts:
+  id_prefix: "FP-SLZ"                        # alert_id = FP-SLZ-<Field_ID>-<alert date YYYYMMDD>
+  # Drought-stress risk levels that count as a drought alert (rules engine, not the legacy score).
+  alert_levels: ["High", "Moderate"]
+  # Also queued for a field check, but NOT counted as a drought alert in the metrics.
+  check_levels: ["Not attributed"]
+  include_controls: true                     # also list Watch/Low fields as optional control visits
+  ledger: alerts_issued.csv                  # append-only record of every issued prediction (rule 10)
+
+# ---------------------------------------------------------------------------------------------
+# Drought-stress rules (the team's 12 rules). Every threshold below is PROVISIONAL and needs
+# agricultural review (Person 3 handbook). Code never hard-codes these values.
+rules:
+  crop: maize
+  field_info: data/solwezi/field_info.csv    # Field_ID, crop, planting_date (optional), stage (optional)
+  # Rule 3/4: water-deficit evidence = rainfall below its multi-year baseline in the assessment month.
+  water_deficit:
+    rain_anomaly_pct_max: -25.0              # <= -25 % of the CHIRPS baseline counts as a deficit
+    soil_moisture_drop_support: -0.03        # month-on-month drop that adds supporting evidence
+    lookback_months: 1                       # a deficit in the previous month also counts (crops respond with a lag)
+    # Root-zone soil moisture below its multi-year same-month mean also counts as water-deficit evidence
+    # (needs soil_moisture_monthly.csv with earlier years). PROVISIONAL.
+    soil_moisture_anomaly_pct_max: -10.0
+  # Rule 3/4: vegetation decline.
+  vegetation:
+    # 'multi_year' needs ndvi_baseline_mXX columns (same-month NDVI mean of earlier seasons).
+    # Until those exist, 'within_season' compares the latest month with this season's earlier peak.
+    baseline: within_season
+    require_multi_year_baseline: false       # true = treat a missing multi-year baseline as Insufficient data
+    decline_abs: -0.05                       # NDVI drop (latest - reference) that counts as a decline
+    decline_rel: -0.08                       # and relative drop (-8 %)
+    severe_abs: -0.10                        # drop that raises a deficit+decline case to High
+    min_valid_fraction: 0.5                  # NDVI valid-pixel share needed in the assessment month
+  # Rule 6: growth stage from planting date (days after planting, medium-maturity rain-fed maize).
+  # Not a local standard; review with an extension officer. Unknown planting date -> stage Unknown.
+  stage_days:
+    emergence: 0
+    early_vegetative: 11
+    vegetative: 31
+    tasselling_silking: 61
+    grain_filling: 76
+    maturity_harvest: 111
+  sensitive_stages: [tasselling_silking, grain_filling]
+  # Data confidence (rule 9): High with no issues, Medium with 1, Low with 2 or more.
+  confidence_issue_limits: {medium: 1, low: 2}
+  small_field_pixels: 100
+  max_data_age_days: 45                      # latest data must end within this many days before the assessment date
+
+kobo:
+  # Verification form. The API token is NOT stored here: put KOBO_TOKEN=<key> in the .env file.
+  server: https://eu.kobotoolbox.org
+  asset_uid: aEBzGzmTMDb2XB87ZfKKNM
+
+# Tables imported from Earth Engine exports (import_gee.py) that feed the pipeline beside the rasters
+tables:
+  soil_moisture_monthly: soil_moisture_monthly.csv   # in the data folder
+  soil_moisture_layer: rootzone                       # rootzone (crop roots) or surface
+  soil_moisture_baseline_years: null                  # null = every year before the season year in the table
+  field_annual: field_annual.csv                      # per-field yearly values, shown as context only
+  s1_vv_monthly: s1_vv_monthly.csv                    # per-field monthly Sentinel-1 VV (dB), context only
+
+validation:
+  field_id_map: config/field_id_map.csv      # Kobo field_id text -> pipeline Field_ID
+  alert_id_map: config/alert_id_map.csv      # Kobo alert_id text -> issued alert ID (approved aliases)
+  min_reason_chars: 15
+  max_alert_to_visit_days: 14
+  min_decided_for_metrics: 10                # below this, metrics are descriptive only
+  require_human_status: true                 # SOP: validation lead assigns Accepted; auto-checks only suggest
+
+dashboard:
+  # Warn on Home when the imagery period ended long before the alert date. Set stale_data_warning to false
+  # when the pilot deliberately uses a past season (for example 2025) as its final dataset.
+  stale_data_warning: true
+  stale_after_days: 150
+
+firebase:
+  # Each pilot area has its own Firestore collections. The Chongwe pilot data stays in the unprefixed
+  # collections (fields, risk_assessments, ...), untouched. Run sync_firebase.bat to upload Solwezi.
+  collection_prefix: solwezi_

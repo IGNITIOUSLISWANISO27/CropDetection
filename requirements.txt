@@ -1,0 +1,12 @@
+numpy
+pandas
+geopandas
+rasterio
+shapely
+pyproj
+pyyaml
+pytest
+streamlit>=1.50
+folium
+altair
+firebase-admin          # Firebase sync and the online dashboard
