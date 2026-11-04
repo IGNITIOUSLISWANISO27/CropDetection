@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64" width="300" height="64">
+  <rect x="2" y="4" width="56" height="56" rx="14" fill="#1F4D3A"/>
+  <path d="M30 13c-9.4 0-16 6.8-16 15.4C14 39 30 51 30 51s16-12 16-22.6C46 19.8 39.4 13 30 13Z" fill="#D9A21B"/>
+  <circle cx="30" cy="28.5" r="10" fill="#1F4D3A"/>
+  <path d="M30 37c-.6-6.2 2-11 8-13.6-.6 6-3.2 10.4-8 13.6Z" fill="#7CC38A"/>
+  <path d="M30 37c.6-6.2-2-11-8-13.6.6 6 3.2 10.4 8 13.6Z" fill="#3E8E5A"/>
+  <text x="70" y="34" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="27" font-weight="800" fill="#1F4D3A">Field<tspan fill="#C8930F">Priority</tspan></text>
+  <text x="71" y="53" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#5E6B63" letter-spacing=".4">Agricultural Intelligence</text>
+</svg>

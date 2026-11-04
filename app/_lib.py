@@ -85,15 +85,13 @@ def icon(name, size=18, color="currentColor", stroke=1.8):
             f'{ICONS.get(name, "")}</svg>')
 
 
-LOGO = (  # original mark: a maize leaf rising from a field grid, with a survey point
-    '<svg viewBox="0 0 48 48" width="{s}" height="{s}" aria-label="FieldPriority logo">'
-    '<rect width="48" height="48" rx="12" fill="#1F4D3A"/>'
-    '<path d="M8 38h32M8 31h32M15 24 12 41M24 24v17M33 24l3 17" stroke="#3E8E5A" stroke-width="2" '
-    'stroke-linecap="round"/>'
-    '<path d="M24 31c-1-10 3-18 13-22-1 10-5 17-13 22Z" fill="#D9A21B"/>'
-    '<path d="M24 31c3-6 6-10 11-15" stroke="#1F4D3A" stroke-width="1.6" stroke-linecap="round" fill="none"/>'
-    '<circle cx="15" cy="16" r="3.2" fill="none" stroke="#FAF8F2" stroke-width="2"/>'
-    '<circle cx="15" cy="16" r="1" fill="#FAF8F2"/></svg>')
+LOGO = (  # original mark: a survey pin holding two maize leaves (same as app/assets/logo_icon.svg)
+    '<svg viewBox="0 0 60 64" width="{s}" height="{s}" aria-label="FieldPriority logo">'
+    '<rect x="2" y="4" width="56" height="56" rx="14" fill="#1F4D3A"/>'
+    '<path d="M30 13c-9.4 0-16 6.8-16 15.4C14 39 30 51 30 51s16-12 16-22.6C46 19.8 39.4 13 30 13Z" fill="#D9A21B"/>'
+    '<circle cx="30" cy="28.5" r="10" fill="#1F4D3A"/>'
+    '<path d="M30 37c-.6-6.2 2-11 8-13.6-.6 6-3.2 10.4-8 13.6Z" fill="#7CC38A"/>'
+    '<path d="M30 37c.6-6.2-2-11-8-13.6.6 6 3.2 10.4 8 13.6Z" fill="#3E8E5A"/></svg>')
 
 # ================================================================ CSS
 CSS = """
@@ -105,9 +103,12 @@ CSS = """
 html, body, .stMarkdown p, .stMarkdown li, label, input, textarea {font-family:var(--fb)}
 h1,h2,h3,h4,.fp-h{font-family:var(--fh) !important;color:var(--ink);letter-spacing:-.01em}
 .stApp{background:var(--cream)}
-.block-container{padding-top:4.6rem;padding-bottom:3rem;max-width:1320px}
-header[data-testid="stHeader"]{background:var(--forest)}
-header[data-testid="stHeader"] a, header[data-testid="stHeader"] span, header[data-testid="stHeader"] p{color:#F4F1E8 !important}
+.block-container{padding-top:5.4rem;padding-bottom:3rem;max-width:1320px}
+header[data-testid="stHeader"]{background:#FFFFFF;border-bottom:1px solid var(--line);height:4.1rem}
+header[data-testid="stHeader"] a, header[data-testid="stHeader"] p{color:var(--ink) !important;font-weight:600}
+header[data-testid="stHeader"] a[aria-current="page"], header[data-testid="stHeader"] [aria-selected="true"]{background:#E6F0E9 !important;border-radius:10px}
+header[data-testid="stHeader"] a[aria-current="page"] p, header[data-testid="stHeader"] a[aria-current="page"] span{color:var(--forest) !important}
+[data-testid="stHeaderLogo"], [data-testid="stLogo"]{height:2.6rem !important;max-height:2.6rem}
 [data-testid="stSidebar"]{background:var(--sand)}
 /* page heading */
 .fp-title{display:flex;align-items:center;gap:14px;margin:.4rem 0 .2rem}
@@ -398,9 +399,11 @@ VIEWS = {"Fit fields": None, "Field close-up": 18, "Neighbourhood (~2 km)": 15, 
          "District (~40 km)": 11, "Province (~200 km)": 8}
 
 
-def build_map(data, A=None, basemap="Satellite", view="Fit fields", focus=None, height_hint=560, labels=True):
+def build_map(data, A=None, basemap="Satellite", view="Fit fields", focus=None, height_hint=560, labels=True,
+              legend=True):
     gdf = data.fields
-    A = (data.assessments if A is None else A).set_index("field_id")
+    A_all = data.assessments if A is None else A
+    A = A_all.set_index("field_id")
     gdf = gdf[gdf["Field_ID"].isin(A.index)]
     status = status_by_field(data)
     target = gdf[gdf["Field_ID"] == focus] if focus else gdf
@@ -441,6 +444,15 @@ def build_map(data, A=None, basemap="Satellite", view="Fit fields", focus=None, 
                      f'box-shadow:0 1px 4px rgba(0,0,0,.4);color:{RISK.get(lvl, {}).get("text", "#fff")};'
                      f'font:700 10px/26px Inter,sans-serif;text-align:center">{E(str(r.Field_ID)[-3:])}</div>')).add_to(m)
     folium.LayerControl(position="topright", collapsed=True).add_to(m)
+    if legend:
+        rows = "".join(f'<div style="display:flex;align-items:center;gap:7px;margin:3px 0"><span style="width:13px;height:13px;'
+                       f'border-radius:3px;background:{RISK[k]["color"]}"></span>{E(RISK[k]["short"])}</div>'
+                       for k in RISK_ORDER if k != "Not assessed")
+        from branca.element import Element
+        m.get_root().html.add_child(Element(
+            f'<div style="position:absolute;left:12px;bottom:26px;z-index:999;background:rgba(255,255,255,.94);'
+            f'border-radius:10px;padding:8px 11px;font:12px Inter,Segoe UI,sans-serif;color:#1E2A24;'
+            f'box-shadow:0 2px 8px rgba(0,0,0,.25)"><b>Risk class</b>{rows}</div>'))
     if z is None:
         m.fit_bounds([[miny, minx], [maxy, maxx]], padding=(40, 40), max_zoom=17 if len(target) == 1 else 15)
     return m
@@ -527,3 +539,216 @@ def hero_svg():
     return ('<svg class="bg" viewBox="0 0 1400 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">'
             + "".join(cells) + '<path d="M-20 300 C 300 250, 520 380, 820 300 S 1300 230, 1440 270" '
             'stroke="#7C6A4D" stroke-width="10" fill="none" opacity=".75"/></svg>')
+
+
+# ================================================================ landing-page building blocks (design brief v2)
+def hero_landscape_svg():
+    """Sunset over a maize field with an acacia on the horizon. Drawn for this app (no photo licence needed)."""
+    import random
+    rnd = random.Random(11)
+    out = ['<svg class="bg" viewBox="0 0 1400 460" preserveAspectRatio="xMidYMid slice" aria-hidden="true">'
+           '<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">'
+           '<stop offset="0" stop-color="#2E5A6B"/><stop offset=".45" stop-color="#C98B4B"/>'
+           '<stop offset=".72" stop-color="#F3C46B"/><stop offset="1" stop-color="#F8DE97"/></linearGradient>'
+           '<radialGradient id="sun" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#FFF6D2"/>'
+           '<stop offset=".35" stop-color="#FFE08A" stop-opacity=".95"/><stop offset="1" stop-color="#FFC857" stop-opacity="0"/></radialGradient>'
+           '<linearGradient id="field" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6E8F3A"/>'
+           '<stop offset=".4" stop-color="#3F7A33"/><stop offset="1" stop-color="#1D4A26"/></linearGradient></defs>'
+           '<rect width="1400" height="460" fill="url(#sky)"/>'
+           '<circle cx="1010" cy="205" r="150" fill="url(#sun)"/><circle cx="1010" cy="205" r="34" fill="#FFF3C4"/>'
+           '<path d="M0 222 C 180 205, 330 214, 520 206 S 900 196, 1100 208 S 1320 214, 1400 206 V 250 H0Z" fill="#5C6E43" opacity=".75"/>']
+    # acacia: trunk + layered flat canopy
+    out.append('<g fill="#2B3524"><path d="M1121 214 C1117 180 1110 160 1098 146 L1103 144 C1113 156 1120 170 1125 186'
+               ' C1130 168 1140 152 1156 141 L1160 145 C1146 158 1135 176 1131 214Z"/>'
+               '<ellipse cx="1128" cy="139" rx="96" ry="15"/><ellipse cx="1092" cy="131" rx="50" ry="10"/>'
+               '<ellipse cx="1166" cy="132" rx="46" ry="9"/><ellipse cx="1128" cy="125" rx="40" ry="8"/></g>')
+    out.append('<path d="M0 238 C 300 228, 700 236, 1000 230 S 1300 228, 1400 232 V 460 H0Z" fill="url(#field)"/>')
+    # maize plants: rows further down are bigger (perspective)
+    for row in range(14):
+        t = row / 13
+        y = 240 + t ** 1.6 * 230
+        h = 10 + t ** 1.5 * 120
+        step = 18 + t * 46
+        x = -rnd.random() * step
+        while x < 1420:
+            sway = rnd.uniform(-4, 4)
+            g = int(70 + t * 30 + rnd.uniform(-12, 12))
+            col = f"rgb({max(20, g - 35)},{min(150, g + 50)},{max(25, g - 30)})"
+            lw = 1.2 + t * 3.2
+            stalk = f'M{x:.0f} {y:.0f} Q{x + sway:.0f} {y - h * .6:.0f} {x + sway * 1.6:.0f} {y - h:.0f}'
+            out.append(f'<path d="{stalk}" stroke="{col}" stroke-width="{lw:.1f}" fill="none" stroke-linecap="round"/>')
+            for k in range(3):
+                ly = y - h * (.3 + .2 * k)
+                d = rnd.choice([-1, 1])
+                out.append(f'<path d="M{x + sway * (.3 + .2 * k):.0f} {ly:.0f} q{d * h * .32:.0f} {-h * .1:.0f} {d * h * .45:.0f} {h * .12:.0f}"'
+                           f' stroke="{col}" stroke-width="{lw * .9:.1f}" fill="none" stroke-linecap="round"/>')
+            if t > .55 and rnd.random() < .5:   # tassel
+                out.append(f'<path d="M{x + sway * 1.6:.0f} {y - h:.0f} l-4 -10 M{x + sway * 1.6:.0f} {y - h:.0f} l4 -11"'
+                           f' stroke="#D8B45A" stroke-width="{lw * .6:.1f}" stroke-linecap="round"/>')
+            x += step * rnd.uniform(.7, 1.25)
+    out.append('</svg>')
+    return "".join(out)
+
+
+def glance_band(items, updated=None):
+    """One banded card: dark header + up to four stats (icon, value, label, small note)."""
+    cells = "".join(
+        f'<div class="fp-gl-cell"><div class="fp-gl-ic" style="background:{bg};color:{fg}">{icon(ic, 26)}</div>'
+        f'<div><div class="fp-gl-val">{val}</div><div class="fp-gl-lab">{E(lab)}</div>'
+        f'<div class="fp-gl-note">{note}</div></div></div>'
+        for ic, val, lab, note, bg, fg in items)
+    up = f'<span class="fp-gl-upd">{icon("clock", 14, "#E8EFE9")} Last updated: {E(updated)}</span>' if updated else ""
+    return (f'<div class="fp-gl"><div class="fp-gl-head"><span>{icon("gauge", 20, "#F2C74E")} FieldPriority at a Glance</span>'
+            f'{up}</div><div class="fp-gl-row">{cells}</div></div>')
+
+
+def donut_chart(A, height=210):
+    counts = risk_counts(A)
+    d = pd.DataFrame([{"Risk": RISK[k]["short"], "level": k, "Fields": counts.get(k, 0)}
+                      for k in RISK_ORDER if counts.get(k)])
+    if d.empty:
+        return None
+    total = d["Fields"].sum()
+    d["Share"] = d["Fields"] / total
+    top = d.sort_values("Fields", ascending=False).iloc[0]
+    base = alt.Chart(d).encode(theta=alt.Theta("Fields:Q", stack=True),
+                               color=alt.Color("level:N", legend=None, scale=alt.Scale(
+                                   domain=list(RISK), range=[RISK[k]["color"] for k in RISK])),
+                               tooltip=["Risk", "Fields", alt.Tooltip("Share:Q", format=".0%")])
+    ring = base.mark_arc(innerRadius=58, outerRadius=88, stroke="#FFFFFF", strokeWidth=2)
+    mid = alt.Chart(pd.DataFrame({"t": [f"{top['Share']:.0%}"], "s": [top["Risk"]]}))
+    t1 = mid.mark_text(font="Inter", fontSize=26, fontWeight=800, color="#1E2A24", dy=-6).encode(text="t:N")
+    t2 = mid.mark_text(font="Inter", fontSize=11, color="#5E6B63", dy=16).encode(text="s:N")
+    return (ring + t1 + t2).properties(height=height, width=height).configure_view(strokeWidth=0)
+
+
+def donut_legend(A):
+    counts = risk_counts(A)
+    total = max(1, sum(counts.values()))
+    return "".join(f'<div class="fp-dl"><span><i style="background:{RISK[k]["color"]}"></i>{E(RISK[k]["short"])}</span>'
+                   f'<b>{counts[k]} · {counts[k] / total:.0%}</b></div>' for k in RISK_ORDER if counts.get(k))
+
+
+FEATURES = [  # (title, text, link, icon, gradient)
+    ("Risk Analysis", "Explore drought-risk classes, where they are and what they mean.", "/risk-analysis", "rise",
+     "linear-gradient(160deg,#2E6B45 0%,#1F4D3A 70%)"),
+    ("Data Quality", "See which records are complete, valid and verified in the field.", "/data-quality", "check",
+     "linear-gradient(160deg,#3E8E5A 0%,#1F4D3A 75%)"),
+    ("Reports", "Download PDF reports, Excel data and field boundaries.", "/reports", "doc",
+     "linear-gradient(160deg,#8B6B4A 0%,#4C3A26 80%)"),
+    ("Supporting farmers for a food-secure future", "Early warning so verifiers reach the right fields first.",
+     "/field-map", "leaf", "linear-gradient(160deg,#C8930F 0%,#7A5300 85%)"),
+]
+
+
+def feature_cards():
+    cards = "".join(
+        f'<a class="fp-feat" href="{href}" target="_self" style="background:{grad}">'
+        f'<div class="fp-feat-ic">{icon(ic, 30, "#FFFFFF")}</div><div class="fp-feat-t">{E(t)}</div>'
+        f'<div class="fp-feat-d">{E(d)}</div><div class="fp-feat-l">Learn more →</div></a>'
+        for t, d, href, ic, grad in FEATURES)
+    return f'<div class="fp-feats">{cards}</div>'
+
+
+def footer():
+    return (f'<div class="fp-foot"><div style="display:flex;gap:12px;align-items:center">{LOGO.format(s=42)}'
+            f'<div><div style="font:800 1.15rem var(--fh);color:#fff">FieldPriority</div>'
+            f'<div style="color:#CFE0D3;font-size:.8rem">Agricultural Intelligence</div></div></div>'
+            f'<div class="fp-foot-tag">Smarter Decisions. Stronger Harvests.</div>'
+            f'<div style="color:#CFE0D3;font-size:.82rem">{E(CFG["pilot_area"])}<br>Data: Sentinel-2 · CHIRPS · SMAP · '
+            f'ERA5-Land · KoboToolbox</div></div>')
+
+
+CSS_V2 = """
+<style>
+.fp-hero{min-height:400px}
+.fp-hero .shade{background:linear-gradient(95deg,rgba(14,38,26,.92) 0%,rgba(18,48,32,.78) 38%,rgba(18,48,32,.15) 70%,rgba(0,0,0,0) 100%)}
+.fp-hero .script{position:absolute;right:42px;bottom:36px;font:italic 600 1.5rem/1.25 Georgia,'Times New Roman',serif;
+  color:#FFF8E6;text-align:right;transform:rotate(-6deg);text-shadow:0 2px 10px rgba(0,0,0,.45)}
+.fp-hero .script:after{content:"";display:block;height:3px;width:120px;margin:8px 0 0 auto;background:#F2C74E;border-radius:3px}
+.fp-gl{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;margin:-.3rem 0 1.2rem;
+  box-shadow:0 6px 20px rgba(20,35,58,.08)}
+.fp-gl-head{background:var(--forest);color:#fff;display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:12px 20px;font:700 1.12rem var(--fh);flex-wrap:wrap}
+.fp-gl-head > span{display:flex;gap:9px;align-items:center}
+.fp-gl-upd{font:500 .8rem var(--fb);color:#E8EFE9;display:flex;gap:6px;align-items:center}
+.fp-gl-row{display:grid;grid-template-columns:repeat(4,1fr)}
+.fp-gl-cell{display:flex;gap:14px;align-items:flex-start;padding:18px 20px;border-right:1px solid var(--line)}
+.fp-gl-cell:last-child{border-right:0}
+.fp-gl-ic{width:50px;height:50px;border-radius:14px;display:grid;place-items:center;flex:none}
+.fp-gl-val{font:800 1.9rem/1.05 var(--fh);color:var(--ink)}
+.fp-gl-lab{font-weight:600;color:var(--ink);font-size:.92rem;margin-top:2px}
+.fp-gl-note{color:var(--muted);font-size:.8rem;margin-top:4px;line-height:1.35}
+.fp-dl{display:flex;justify-content:space-between;gap:10px;font-size:.88rem;padding:5px 0;border-bottom:1px dashed var(--line)}
+.fp-dl:last-child{border-bottom:0}
+.fp-dl i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:8px;vertical-align:-1px}
+.fp-panel-h{display:flex;justify-content:space-between;align-items:center;font:700 1.02rem var(--fh);color:var(--ink);margin-bottom:.5rem}
+.fp-panel-h a{font:600 .8rem var(--fb);color:var(--leaf) !important;text-decoration:none}
+.fp-feats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:1.4rem 0 .4rem}
+.fp-feat{position:relative;display:flex;flex-direction:column;gap:6px;min-height:178px;border-radius:16px;padding:18px;
+  color:#fff !important;text-decoration:none !important;overflow:hidden;box-shadow:0 6px 18px rgba(20,35,58,.12)}
+.fp-feat:before{content:"";position:absolute;inset:auto -30px -40px auto;width:150px;height:150px;border-radius:50%;
+  background:rgba(255,255,255,.08)}
+.fp-feat-ic{width:48px;height:48px;border-radius:12px;background:rgba(255,255,255,.14);display:grid;place-items:center}
+.fp-feat-t{font:700 1.08rem var(--fh);margin-top:auto}
+.fp-feat-d{font-size:.86rem;color:#EAF1EA;line-height:1.35}
+.fp-feat-l{font-weight:600;font-size:.84rem;color:#FFE7A3}
+.fp-foot{background:var(--forest);border-radius:16px;padding:20px 24px;margin-top:1.6rem;display:flex;
+  justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}
+.fp-foot-tag{font:italic 600 1.08rem var(--fh);color:#F2C74E}
+/* field profile header band */
+.fp-ph{background:var(--forest);border-radius:18px;padding:22px 26px;color:#fff;display:flex;gap:18px;align-items:center;
+  flex-wrap:wrap;margin-bottom:1rem;box-shadow:0 8px 24px rgba(20,35,58,.14)}
+.fp-ph h1{color:#fff !important;margin:0;font-size:2rem}
+.fp-ph .meta{display:flex;gap:16px;flex-wrap:wrap;color:#DDE8DF;font-size:.9rem;margin-top:6px}
+.fp-ph .meta span{display:flex;gap:6px;align-items:center}
+.fp-rc{border-radius:16px;padding:16px 18px;display:flex;gap:14px;align-items:center}
+.fp-rc .big{font:800 1.6rem var(--fh)}
+.fp-ind{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;font-size:.9rem;padding:7px 0;
+  border-bottom:1px solid var(--line)}
+.fp-ind:last-child{border-bottom:0}
+.fp-act-list li{margin:6px 0;list-style:none;padding-left:26px;position:relative}
+.fp-act-list li:before{content:"";position:absolute;left:0;top:3px;width:16px;height:16px;border-radius:50%;
+  background:#2E8B57 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m6 12.5 4 4 8-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/></svg>") center/12px no-repeat}
+@media (max-width: 900px){
+  .fp-gl-row{grid-template-columns:repeat(2,1fr)} .fp-gl-cell:nth-child(2){border-right:0}
+  .fp-gl-cell{border-bottom:1px solid var(--line)}
+  .fp-feats{grid-template-columns:repeat(2,1fr)}
+  .fp-hero .script{display:none}
+}
+@media (max-width: 560px){ .fp-gl-row,.fp-feats{grid-template-columns:1fr} .fp-gl-cell{border-right:0} }
+</style>
+"""
+
+
+# ---------------------------------------------------------------- Kobo photos (shown only with a Kobo token)
+def kobo_token():
+    tok = os.environ.get("KOBO_TOKEN")
+    if tok:
+        return tok
+    try:
+        if "KOBO_TOKEN" in st.secrets:
+            return st.secrets["KOBO_TOKEN"]
+    except Exception:
+        pass
+    try:
+        from fieldpriority.ingest.kobo import load_dotenv
+        load_dotenv()
+        return os.environ.get("KOBO_TOKEN")
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def kobo_photo(url):
+    """Download one Kobo attachment with the API token (server side, never sent to the browser)."""
+    import urllib.request
+    tok = kobo_token()
+    if not tok or not url:
+        return None
+    try:
+        req = urllib.request.Request(url, headers={"Authorization": f"Token {tok}", "User-Agent": "FieldPriority"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.read()
+    except Exception:
+        return None

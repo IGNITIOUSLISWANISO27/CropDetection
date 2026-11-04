@@ -6,9 +6,11 @@ import streamlit as st
 
 st.set_page_config(page_title="FieldPriority · Maize drought-risk monitoring", page_icon=":material/agriculture:",
                    layout="wide", initial_sidebar_state="collapsed")
-from _lib import CSS, load_data
+from _lib import CSS, CSS_V2, load_data
 
-st.markdown(CSS, unsafe_allow_html=True)
+A_DIR = Path(__file__).resolve().parent / "assets"
+st.logo(str(A_DIR / "logo_wordmark.svg"), size="large")
+st.markdown(CSS + CSS_V2, unsafe_allow_html=True)
 st.session_state["fp_data"] = load_data()
 
 V = Path(__file__).resolve().parent / "views"
