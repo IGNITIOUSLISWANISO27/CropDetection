@@ -22,7 +22,41 @@ import streamlit.components.v1 as components
 from fieldpriority.config import load_config
 from fieldpriority.storage.repository import get_repository
 
-CFG = load_config()
+from fieldpriority.config import available_pilots
+
+PILOTS = available_pilots()
+
+
+def current_pilot():
+    try:
+        p = st.session_state.get("pilot")
+    except Exception:
+        p = None
+    p = p or os.environ.get("FIELDPRIORITY_PILOT") or PILOTS[0]
+    return p if p in PILOTS else PILOTS[0]
+
+
+@st.cache_resource
+def _cfg(pilot):
+    return load_config(pilot=pilot)
+
+
+class _PilotConfig(dict):
+    """Settings of the pilot area chosen in this browser session (Solwezi, Chongwe, ...)."""
+    def _c(self):
+        return _cfg(current_pilot())
+
+    def __getitem__(self, k):
+        return self._c()[k]
+
+    def get(self, k, d=None):
+        return self._c().get(k, d)
+
+    def __contains__(self, k):
+        return k in self._c()
+
+
+CFG = _PilotConfig()
 E = html.escape
 
 # ================================================================ design tokens
@@ -277,8 +311,8 @@ def issue_labels(codes):
 
 # ================================================================ data
 @st.cache_data(ttl=120, show_spinner="Loading FieldPriority data")
-def _load(source, outputs_dir, cred):
-    return get_repository(source, outputs_dir, cred).load()
+def _load(source, outputs_dir, cred, prefix=None):
+    return get_repository(source, outputs_dir, cred, prefix=prefix).load()
 
 
 def load_data():
@@ -295,9 +329,10 @@ def load_data():
                           help="Automatic uses Firebase when a key is configured, otherwise the local outputs folder.")
         if st.button("Reload data", width="stretch", icon=":material/refresh:"):
             st.cache_data.clear()
-    outputs = os.environ.get("FIELDPRIORITY_OUTPUTS") or str(ROOT / CFG["paths"]["output_dir"])
+    env_out = os.environ.get("FIELDPRIORITY_OUTPUTS")
+    outputs = (env_out.replace("{pilot}", current_pilot()) if env_out else str(ROOT / CFG["paths"]["output_dir"]))
     try:
-        data = _load(source, outputs, None)
+        data = _load(source, outputs, None, (CFG.get("firebase") or {}).get("collection_prefix", ""))
     except Exception as e:
         st.error(f"Could not load data. {e}")
         st.stop()
@@ -389,8 +424,15 @@ def field_location(data, fid):
             "geom_type": g.geom_type, "valid": bool(g.is_valid)}
 
 
+def link(path, **params):
+    """In-app link that keeps the chosen pilot area (a plain link opens a new session)."""
+    from urllib.parse import urlencode
+    q = {**{k: v for k, v in params.items() if v is not None}, "area": current_pilot()}
+    return E(f"{path}?{urlencode(q)}")
+
+
 def profile_link(fid):
-    return f"/assessments?field={E(str(fid))}"
+    return link("/assessments", field=str(fid))
 
 
 # ================================================================ map
@@ -643,7 +685,7 @@ FEATURES = [  # (title, text, link, icon, gradient)
 
 def feature_cards():
     cards = "".join(
-        f'<a class="fp-feat" href="{href}" target="_self" style="background:{grad}">'
+        f'<a class="fp-feat" href="{link(href)}" target="_self" style="background:{grad}">'
         f'<div class="fp-feat-ic">{icon(ic, 30, "#FFFFFF")}</div><div class="fp-feat-t">{E(t)}</div>'
         f'<div class="fp-feat-d">{E(d)}</div><div class="fp-feat-l">Learn more →</div></a>'
         for t, d, href, ic, grad in FEATURES)
@@ -655,8 +697,8 @@ def footer():
             f'<div><div style="font:800 1.15rem var(--fh);color:#fff">FieldPriority</div>'
             f'<div style="color:#CFE0D3;font-size:.8rem">Agricultural Intelligence</div></div></div>'
             f'<div class="fp-foot-tag">Smarter Decisions. Stronger Harvests.</div>'
-            f'<div style="color:#CFE0D3;font-size:.82rem">{E(CFG["pilot_area"])}<br>Data: Sentinel-2 · CHIRPS · SMAP · '
-            f'ERA5-Land · KoboToolbox</div></div>')
+            f'<div style="color:#CFE0D3;font-size:.82rem">{E(CFG["pilot_area"])}<br>Data: Sentinel-2 · CHIRPS · '
+            f'soil-moisture and temperature grids · KoboToolbox</div></div>')
 
 
 CSS_V2 = """

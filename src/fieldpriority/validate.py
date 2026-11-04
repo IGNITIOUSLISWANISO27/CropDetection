@@ -34,10 +34,36 @@ def load_issued(assessments_json, ledger=None):
                          for d in docs])
 
 
+def records_for_pilot(df, cfg, amap=None):
+    """One Kobo form serves every pilot area. Keep the records that belong to this area: alert ID with this
+    area's prefix (after an approved alias); otherwise, when the alert ID is not a FieldPriority ID, the Kobo
+    'district' answer. Records without either stay with the default area (settings.yaml)."""
+    from .validation.quality import exact_id
+    if df is None or not len(df) or "alert_id" not in df:
+        return df
+    amap = amap or {}
+    prefix = str(cfg["alerts"]["id_prefix"]).upper()
+    district = str(cfg.get("pilot_district") or "").strip().lower()
+    is_default = cfg.get("pilot_name") == "solwezi"
+
+    def mine(r):
+        aid = exact_id(r.get("alert_id"))
+        aid = str(amap[aid]["alert_id"]).upper() if aid in amap else (aid or "")
+        if aid.startswith(prefix + "-"):
+            return True
+        if aid.startswith("FP-"):
+            return False
+        d = str(r.get("district") or "").strip().lower()
+        return d == district if d and d != "nan" else is_default
+    keep = df.apply(mine, axis=1)
+    return df[keep].reset_index(drop=True)
+
+
 def run_validation(cfg, kobo_df, issued, out_dir, today=None):
     root = Path(cfg["_root"])
     fmap = load_field_map(root / cfg["validation"]["field_id_map"])
     amap = load_alert_map(root / cfg["validation"].get("alert_id_map", "config/alert_id_map.csv"))
+    kobo_df = records_for_pilot(kobo_df, cfg, amap)
     rec = process_records(kobo_df, cfg, fmap, issued, today, amap)     # links visits to ANY issued alert
     # Evaluate the current model version only; older alerts keep their original prediction in the ledger.
     mv = cfg.get("model_version")
@@ -49,7 +75,7 @@ def run_validation(cfg, kobo_df, issued, out_dir, today=None):
     metrics["alerts_in_ledger"] = int(len(issued))
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    rec.drop(columns=["flags"]).to_csv(out / "verification_records.csv", index=False)
+    rec.drop(columns=["flags"], errors="ignore").to_csv(out / "verification_records.csv", index=False)
     from .storage.firebase_client import clean
     (out / "verification_records.json").write_text(json.dumps(clean(rec.to_dict("records")), indent=2))
     to_register(rec).to_csv(out / "validation_register.csv", index=False)

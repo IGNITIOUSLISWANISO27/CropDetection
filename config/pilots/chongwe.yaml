@@ -1,0 +1,39 @@
+# Chongwe pilot (Lusaka Province): the first FieldPriority pilot, restored from the archived copies.
+# Only what differs from config/settings.yaml (Solwezi) is listed here.
+pilot_short: Chongwe
+pilot_area: "Chongwe pilot, Lusaka Province, Zambia"
+pilot_district: Chongwe            # Kobo 'district' value used to route visits without a FieldPriority alert ID
+model_version: "0.3.0-solwezi"     # same rules engine as Solwezi (the Chongwe runs before 4 Nov 2026 used 0.2.0-rules)
+year: 2025
+months: [1, 2, 3]
+period_label: "2025-01..2025-03"
+
+paths:
+  data_dir: data/chongwe_archive/raw
+  fields_shapefile: FieldPriority_Final_Field_Polygons.shp
+  output_dir: outputs/chongwe
+
+alerts:
+  id_prefix: "FP-CHG"
+
+rules:
+  field_info: config/field_info.csv
+
+firebase:
+  collection_prefix: chongwe_
+
+# Chongwe has monthly rasters (Earth Engine exports) and no multi-year soil-moisture table
+tables:
+  _replace: true
+
+sources:
+  greenness_seasonal: "Sentinel-2 median composite 2025-01-01..2025-04-01"
+  ndvi: "Sentinel-2 monthly NDVI, 10 m (Earth Engine export)"
+  rainfall: "CHIRPS, about 5 km cell"
+  rainfall_baseline: "CHIRPS 2015-2024 reference mean"
+  soil_moisture: "Soil moisture, 0.1 degree grid (~11 km), product to be confirmed"
+  soil_moisture_baseline: "No multi-year baseline supplied for Chongwe"
+  temperature: "Temperature, 0.1 degree grid (~11 km), product to be confirmed"
+
+validation:
+  field_id_map: config/field_id_map_chongwe.csv

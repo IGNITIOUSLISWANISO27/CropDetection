@@ -1,5 +1,8 @@
 # FieldPriority pipeline settings. Every threshold lives here, never in code.
 project: FieldPriority
+pilot_name: solwezi            # this file = the Solwezi pilot; other areas: config/pilots/*.yaml
+pilot_short: Solwezi
+pilot_district: Solwezi
 pilot_area: Solwezi pilot, North-Western Province, Zambia
 model_version: "0.3.0-solwezi"
 year: 2025

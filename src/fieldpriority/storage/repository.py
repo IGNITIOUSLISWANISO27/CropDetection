@@ -123,7 +123,7 @@ class FirebaseRepository:
             meta=s.read_doc("meta", "latest"))
 
 
-def get_repository(source="auto", outputs_dir="outputs", cred=None, store=None):
+def get_repository(source="auto", outputs_dir="outputs", cred=None, store=None, prefix=None):
     """source: 'local' | 'firebase' | 'auto' (Firebase if a key is configured and reachable, else local)."""
     if store is not None:
         return FirebaseRepository(store)
@@ -132,7 +132,7 @@ def get_repository(source="auto", outputs_dir="outputs", cred=None, store=None):
     if source in ("firebase", "auto") and cred:
         try:
             from .firebase_client import FirebaseStore
-            repo = FirebaseRepository(FirebaseStore.connect(cred))
+            repo = FirebaseRepository(FirebaseStore.connect(cred, prefix))
             repo.load()      # fail early so 'auto' can fall back
             return repo
         except Exception:

@@ -36,7 +36,8 @@ def main():
     from .config import load_config
     cfg = load_config()
     n = sync(FirebaseStore.connect(a.cred), a.outputs or Path(cfg["_root"]) / cfg["paths"]["output_dir"])
-    print(f"Synced {n} documents to Firebase")
+    print(f"Synced {n} documents to Firebase ({cfg['pilot_short']}, collections "
+          f"{(cfg.get('firebase') or {}).get('collection_prefix', '')}*)")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 from _lib import (get_data, html_block, hero_landscape_svg, glance_band, section, risk_counts, build_map, show_map,
                   donut_chart, donut_legend, feature_cards, footer, visits, badge, icon, period_text, empty,
-                  RISK, RISK_ORDER, CFG, E, profile_link)
+                  RISK, RISK_ORDER, CFG, E, profile_link, link)
 
 data = get_data()
 A = data.assessments
@@ -19,8 +19,8 @@ html_block(f"""
   <p>A geospatial decision-support platform for monitoring maize field conditions and assessing drought-related
   risks. It combines satellite crop greenness, rainfall and soil moisture with field visits from KoboToolbox,
   and shows verifiers which fields to visit first.</p>
-  <a class="fp-btn gold" href="/assessments" target="_self">{icon("pin", 18)} Explore Assessments →</a>
-  <a class="fp-btn ghost" href="/field-map" target="_self">{icon("layers", 18)} View Field Map</a>
+  <a class="fp-btn gold" href="{link('/assessments')}" target="_self">{icon("pin", 18)} Explore Assessments →</a>
+  <a class="fp-btn ghost" href="{link('/field-map')}" target="_self">{icon("layers", 18)} View Field Map</a>
  </div>
  <div class="script">Smart Agriculture.<br>Resilient Farmers.</div>
 </div>""")
@@ -52,12 +52,12 @@ left, right = st.columns([1.75, 1], gap="medium")
 with left:
     with st.container(border=True):
         html_block(f'<div class="fp-panel-h"><span>{icon("pin", 18, "#1F4D3A")} Geographical Field Overview</span>'
-                   f'<a href="/field-map" target="_self">Open full map →</a></div>')
+                   f'<a href="{link("/field-map")}" target="_self">Open full map →</a></div>')
         show_map(build_map(data, basemap="Satellite"), height=470)
 with right:
     with st.container(border=True):
         html_block(f'<div class="fp-panel-h"><span>{icon("rise", 18, "#1F4D3A")} Risk Distribution</span>'
-                   f'<a href="/risk-analysis" target="_self">Details →</a></div>')
+                   f'<a href="{link("/risk-analysis")}" target="_self">Details →</a></div>')
         ch = donut_chart(A, height=170)
         if ch is None:
             empty("No assessments yet.")
@@ -67,7 +67,7 @@ with right:
             d2.markdown(donut_legend(A), unsafe_allow_html=True)
     with st.container(border=True):
         html_block(f'<div class="fp-panel-h"><span>{icon("clock", 18, "#1F4D3A")} Recent Activity</span>'
-                   f'<a href="/assessments" target="_self">View all →</a></div>')
+                   f'<a href="{link("/assessments")}" target="_self">View all →</a></div>')
         events = []
         for r in V.to_dict("records") if len(V) else []:
             fid = r.get("field_id_pipeline") or r.get("field_id")

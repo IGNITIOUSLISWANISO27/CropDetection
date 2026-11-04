@@ -225,4 +225,9 @@ def process_records(df, cfg, field_map, issued, today=None, alert_map=None):
                      "analysis_eligible": bool(real and final == "Accepted" and ctx.get("matched_alert_id")
                                                 and (human or not cfg["validation"]["require_human_status"])
                                                 and g.get("permission") == "yes" and g.get("field_verdict") in L.VERDICT)})
+    if not rows:   # no record for this pilot area: keep the columns the metrics and register expect
+        return pd.DataFrame(columns=list(df.columns) + ["is_test", "flags", "flag_codes", "suggested_status",
+                                                        "validation_status_final", "status_source", "analysis_eligible",
+                                                        "matched_alert_id", "field_id_pipeline", "alert_level",
+                                                        "visit_date", "lag_days"])
     return pd.DataFrame(rows)
