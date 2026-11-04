@@ -81,6 +81,32 @@ def build_queue(full, docs, cfg):
     return q.sort_values(["_o", "legacy_score"], ascending=[True, False]).drop(columns="_o")
 
 
+def avoid_alert_id_clash(ledger_path, docs):
+    """A prediction on NEWER data must never reuse an alert ID already issued for older data (for example the
+    monthly update on the same day as an earlier run). It gets a letter suffix instead: FP-SLZ-F001-20261104-B."""
+    if not Path(ledger_path).exists():
+        return []
+    led = pd.read_csv(ledger_path, dtype=str).fillna("")
+    issued = {r["alert_id"]: r for r in led.to_dict("records")}
+    notes = []
+    for d in docs:
+        old = issued.get(d["alert_id"])
+        if old is None:
+            continue
+        if old.get("data_end_date", "") == str(d.get("data_end_date") or ""):
+            continue                      # same data: rule 10 keeps the issued prediction under this ID
+        base = d["alert_id"]
+        for letter in "BCDEFGHJKLMNPQRSTUVWXYZ":
+            if f"{base}-{letter}" not in issued:
+                d["alert_id"] = f"{base}-{letter}"
+                break
+        notes.append(f"{d['field_id']}: alert {base} was already issued today for other data, so this new "
+                     f"prediction is issued as {d['alert_id']}")
+    for n in notes:
+        print("NOTE:", n)
+    return notes
+
+
 def reuse_unchanged_alerts(ledger_path, docs):
     """A rerun on the same data must not issue a new alert. If a field's most recent issued predictions have the
     same data end date, model version, outcome and risk level as this run, keep the alert ID that was issued
@@ -241,6 +267,7 @@ def run(cfg, data_dir, out_dir, firebase=False, cred=None, alert_date=None, asse
     ledger_path = Path(out_dir) / a_cfg.get("ledger", "alerts_issued.csv")
     if alert_date is None:
         notes += reuse_unchanged_alerts(ledger_path, docs)
+    notes += avoid_alert_id_clash(ledger_path, docs)
     seeded = seed_ledger_from_legacy(ledger_path, Path(out_dir) / "risk_assessments.json")
     if seeded:
         notes.append(f"LEDGER: kept {seeded} alerts issued earlier by the v1 score exactly as issued")

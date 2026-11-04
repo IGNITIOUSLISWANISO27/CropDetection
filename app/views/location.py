@@ -121,7 +121,7 @@ c[0].markdown(card("Rainfall", recs.get("rainfall_anomaly_pct"),
 tx = recs.get("tmax_mean") or {}
 c[1].markdown(card("Temperature", recs.get("temperature_deviation"),
                    f'<div class="fp-sub" style="margin-bottom:6px">Mean {E((recs.get("temperature_mean") or {}).get("display") or "–")}'
-                   f' · daily maximum {E(tx.get("display") or "–")}</div>'), unsafe_allow_html=True)
+                   f' · hottest of each month {E(tx.get("display") or "–")}</div>'), unsafe_allow_html=True)
 c[2].markdown(card("Water stress", recs.get("water_stress")), unsafe_allow_html=True)
 c = st.columns(3)
 c[0].markdown(card("Vegetation condition", recs.get("vegetation_anomaly_pct")), unsafe_allow_html=True)

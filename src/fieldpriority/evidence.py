@@ -29,7 +29,7 @@ INDICATORS = {
     "rainfall_condition": "Rainfall condition",
     "temperature_mean": "Mean temperature",
     "temperature_deviation": "Temperature compared with normal",
-    "tmax_mean": "Mean daily maximum temperature",
+    "tmax_mean": "Hottest temperature of the month (season average)",
     "heat_exposure": "Heat exposure",
     "vegetation_anomaly_pct": "Vegetation condition (NDVI vs normal)",
     "soil_moisture_anomaly_pct": "Root-zone soil moisture vs normal",

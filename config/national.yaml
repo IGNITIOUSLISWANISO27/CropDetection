@@ -52,7 +52,7 @@ classes:
     much_warmer: 1.0
     warmer: 0.5
     cooler: -0.5
-  heat_days_tmax_c: 32     # monthly mean of daily maximum above this counts as heat exposure for maize
+  heat_days_tmax_c: 35     # hottest temperature of the month (season average) above this = heat exposure
   vegetation_pct:          # NDVI vs its multi-year mean for the same months
     much_below: -15
     below: -7

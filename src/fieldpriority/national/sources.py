@@ -144,7 +144,7 @@ def power_daily_months(lat, lon, months):
         days = pd.Period(f"{ym // 100}-{ym % 100:02d}", "M").days_in_month
         ok = g["T2M"].notna().sum() >= days - 3          # nearly every day present
         out.append({"ym": ym, "t2m": g["T2M"].mean() if ok else np.nan,
-                    "t2m_max": g["T2M_MAX"].mean() if ok else np.nan,
+                    "t2m_max": g["T2M_MAX"].max() if ok else np.nan,     # monthly T2M_MAX = hottest value of the month
                     "allsky_mj": g["ALLSKY_SFC_SW_DWN"].mean() if g["ALLSKY_SFC_SW_DWN"].notna().sum() >= days - 3 else np.nan})
     return out
 
@@ -154,7 +154,8 @@ def power_table(districts, needed, table_path, log=print, today=None):
     today = today or dt.date.today()
     p = Path(table_path)
     t = pd.read_csv(p) if p.exists() else pd.DataFrame(columns=["district_id", "ym", "t2m", "t2m_max", "allsky_mj"])
-    have = set(zip(t["district_id"], t["ym"].astype(int)))
+    # months of the current year come from daily data that can still be revised: always fetched again
+    have = {(d, ym) for d, ym in zip(t["district_id"], t["ym"].astype(int)) if ym // 100 < today.year}
     new = []
     fails = 0
     for r in districts.itertuples():

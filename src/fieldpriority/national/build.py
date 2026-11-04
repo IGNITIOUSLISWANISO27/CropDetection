@@ -232,7 +232,8 @@ def build(cfg=None, today=None, offline=False, log=print):
                 recs.append(record(*L, "tmax_mean", xc, "°C", f"{xc:.1f} °C ({xdev:+.1f} °C vs normal)",
                                    "Hot" if hot else "", per, label, S["temperature"]["name"], S["temperature"]["url"],
                                    S["temperature"]["resolution"], "District central point",
-                                   S["temperature"]["data_type"], "Mean of monthly mean daily maximum temperature",
+                                   S["temperature"]["data_type"],
+                                   "Highest temperature of each month, averaged over the season's months",
                                    blabel, "Medium", province=P))
             sol = [pw["allsky_mj"].get((solar_year, m)) for m in range(1, 13)]
             sol = [x for x in sol if x is not None and np.isfinite(x)]
