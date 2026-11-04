@@ -13,6 +13,9 @@ The dashboard now opens on a Zambia-wide view (Integrated Agricultural & Environ
 a map of all 116 districts with switchable layers, a six-indicator summary, and a **location report** per district
 (profile, environmental conditions, crop condition and verification, integrated interpretation, practical
 considerations). The pilot fields (Solwezi, Chongwe) sit inside it under *Pilot fields*.
+Each of the 10 provinces also has a report (`src/fieldpriority/national/aggregate.py`): area-weighted averages of its
+districts, with a table linking to each district. Reports show field photos from Kobo visits (with `KOBO_TOKEN` in the
+app's secrets) and a seasonal comparison of rainfall and temperature over the last 11 seasons.
 
 | Layer | Source | Status |
 |---|---|---|

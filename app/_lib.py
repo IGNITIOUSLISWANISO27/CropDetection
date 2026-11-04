@@ -851,11 +851,14 @@ def monitored_fields(nd=None):
             pt = geo.loc[fid].geometry.representative_point()
             mine = v[v["field_id_pipeline"] == fid] if len(v) and "field_id_pipeline" in v else pd.DataFrame()
             approved = int(mine["analysis_eligible"].fillna(False).astype(bool).sum()) if len(mine) else 0
-            photos = int(sum(len(attachments(x)) for x in mine.to_dict("records"))) if len(mine) else 0
+            pics = [("Crop" if a.get("media_file_basename") == x.get("crop_photo") else
+                     "Soil" if a.get("media_file_basename") == x.get("soil_photo") else "Photo", x.get("visit_date"), a)
+                    for x in (mine.to_dict("records") if len(mine) else []) for a in attachments(x)]
+            photos = len(pics)
             rows.append({"pilot": p, "pilot_short": _cfg(p)["pilot_short"], "field_id": fid, "lat": pt.y,
                          "lon": pt.x, "risk_level": r["risk_level"], "outcome": r["outcome"],
                          "data_confidence": r["data_confidence"], "verification": stat.get(fid, "Not yet verified"),
-                         "visits": len(mine), "approved": approved, "photos": photos, "period": r.get("period"),
+                         "visits": len(mine), "approved": approved, "photos": photos, "pics": pics, "period": r.get("period"),
                          "area_ha": float(geo.loc[fid, "area_ha"]), "growth_stage": r.get("growth_stage_label"),
                          "water_deficit": r.get("water_deficit"), "vegetation_decline": r.get("vegetation_decline")})
     f = pd.DataFrame(rows)
@@ -1016,8 +1019,9 @@ def build_zambia_map(nd, key, fields=None, focus=None, show_fields=True, height=
         tooltip=folium.GeoJsonTooltip(["district", "value"], aliases=["District", LAYERS[key]["label"]], sticky=True),
         popup=folium.GeoJsonPopup(["pop"], labels=False))
     gj.add_to(m)
+    focus = [focus] if isinstance(focus, str) else (list(focus) if focus is not None else None)
     if focus is not None:
-        fg = g[g["district_id"] == focus]
+        fg = g[g["district_id"].isin(focus)].dissolve()
         folium.GeoJson(_json.loads(fg[["geometry"]].to_json()), name="Selected district",
                        style_function=lambda f: {"fill": False, "color": "#14233A", "weight": 3}).add_to(m)
     if show_fields and fields is not None and len(fields):
@@ -1055,7 +1059,7 @@ def build_zambia_map(nd, key, fields=None, focus=None, show_fields=True, height=
         f'border-radius:10px;padding:8px 11px;font:12px Inter,Segoe UI,sans-serif;color:#1E2A24;max-width:230px;'
         f'box-shadow:0 2px 8px rgba(0,0,0,.25)"><b>{E(LAYERS[key]["label"])}</b>{rows}{extra}</div>'))
     if focus is not None:
-        b = g[g["district_id"] == focus].total_bounds
+        b = g[g["district_id"].isin(focus)].total_bounds
         m.fit_bounds([[b[1], b[0]], [b[3], b[2]]], padding=(20, 20))
     else:
         m.fit_bounds([[-18.1, 21.99], [-8.2, 33.7]], padding=(6, 6))
@@ -1171,6 +1175,18 @@ CSS_V3 = """
 .fp-flow .b{background:var(--forest);color:#fff;border-radius:12px;padding:10px 14px;font-size:.84rem}
 .fp-flow .b b{display:block;font:700 .92rem var(--fh);color:#F2C74E}
 .fp-flow .a{color:var(--forest);font-size:1.4rem;font-weight:700}
+.fp-ident{display:grid;grid-template-columns:1.5fr 1fr;gap:0;border-radius:18px;overflow:hidden;margin:1.4rem 0 .4rem;
+  box-shadow:0 8px 24px rgba(20,35,58,.12)}
+.fp-ident .l{background:var(--forest);color:#E8EFE9;padding:22px 26px}
+.fp-ident h2{color:#fff !important;font:800 1.45rem/1.2 var(--fh);margin:.2rem 0 .6rem}
+.fp-ident p{margin:0 0 1rem;line-height:1.5}
+.fp-ident .foc{display:flex;gap:10px;flex-wrap:wrap}
+.fp-ident .foc span{background:rgba(255,255,255,.08);border:1px solid rgba(242,199,78,.45);border-radius:10px;padding:7px 12px;
+  font-size:.9rem;color:#fff}
+.fp-ident .foc b{display:block;font:600 .68rem var(--fb);letter-spacing:.08em;text-transform:uppercase;color:#F2C74E}
+.fp-ident .r{background:#fff;padding:20px 24px;border:1px solid var(--line);border-left:0}
+.fp-ident .r .h{font:700 1rem var(--fh);color:var(--ink);margin-bottom:.5rem}
+@media (max-width: 800px){ .fp-ident{grid-template-columns:1fr} .fp-ident .r{border-left:1px solid var(--line)} }
 .fp-story{background:linear-gradient(120deg,#FFF8E6,#F6E7B8);border:1px solid #F0DCA4;border-radius:16px;padding:18px 22px;
   color:#4A3A10;margin-top:1.2rem}
 .fp-story h3{margin:0 0 .3rem;color:#1E2A24}

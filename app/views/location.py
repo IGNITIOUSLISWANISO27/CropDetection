@@ -3,33 +3,57 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 from _lib import (html_block, icon, badge, national, monitored_fields, location_records, build_zambia_map, show_map,
-                  period_of, type_tag, conf_tag, evidence_line, class_chip, empty, link, interpret, LEVELS, NCFG,
-                  NMON, RISK, E, C)
+                  period_of, type_tag, conf_tag, evidence_line, class_chip, empty, link, interpret, kobo_photo,
+                  LEVELS, NCFG, NMON, RISK, E, C)
 
 nd = national()
 F = monitored_fields(nd)
 D = nd.districts.sort_values("district").reset_index(drop=True)
 ids = D["district_id"].tolist()
-names = dict(zip(D["district_id"], D["district"] + " · " + D["province"] + " Province"))
+provs = sorted(D["province"].unique())
+OPTS = ["p:" + p for p in provs] + ["d:" + i for i in ids]
+names = {**{"p:" + p: f"{p} Province (all {int((D['province'] == p).sum())} districts)" for p in provs},
+         **dict(zip("d:" + D["district_id"], D["district"] + " · " + D["province"] + " Province"))}
 per = period_of(nd)
 
-qp = st.query_params.get("district")
-if "loc_pick" not in st.session_state or (qp in ids and qp != st.session_state.get("loc_pick")):
-    st.session_state["loc_pick"] = qp if qp in ids else (F["district_id"].dropna().iloc[0] if len(F) and
-                                                       F["district_id"].notna().any() else "solwezi")
+qd, qprov = st.query_params.get("district"), st.query_params.get("province")
+want = ("d:" + qd) if qd in ids else ("p:" + qprov) if qprov in provs else None
+if "loc_pick" not in st.session_state or (want and want != st.session_state.get("loc_pick")):
+    st.session_state["loc_pick"] = want or ("d:" + (F["district_id"].dropna().iloc[0] if len(F) and
+                                                    F["district_id"].notna().any() else "solwezi"))
 
 html_block('<div class="fp-eyebrow">Location-specific intelligence report</div>')
 s1, s2 = st.columns([2, 1.2], vertical_alignment="bottom")
-did = s1.selectbox("Location", ids, key="loc_pick", format_func=names.get,
-                   help="Every district of Zambia. Monitored pilot fields have their own field profile (Assessments).")
-st.query_params["district"] = did
-d = D[D["district_id"] == did].iloc[0]
-recs = location_records(nd, did)
-here = F[F["district_id"] == did] if len(F) else F
+pick = s1.selectbox("Location", OPTS, key="loc_pick", format_func=names.get,
+                    help="A province (all its districts together) or one district. Monitored pilot fields have their "
+                         "own field profile (Assessments).")
+is_prov = pick.startswith("p:")
+if is_prov:
+    prov = pick[2:]
+    st.query_params.pop("district", None)
+    st.query_params["province"] = prov
+    from fieldpriority.national.aggregate import province_view, province_id
+    recs, M, S_prov, members = province_view(nd, NCFG, prov)
+    did = province_id(prov)
+    here = F[F["province"] == prov] if len(F) else F
+    name, sub = f"{prov} Province", "Zambia"
+    rows_d = D[D["province"] == prov]
+else:
+    did = pick[2:]
+    st.query_params.pop("province", None)
+    st.query_params["district"] = did
+    recs = location_records(nd, did)
+    here = F[F["district_id"] == did] if len(F) else F
+    members = [did]
+    rows_d = D[D["district_id"] == did]
+    name, sub = rows_d.iloc[0]["district"], rows_d.iloc[0]["province"] + " Province, Zambia"
 
 # monthly values for the charts and the per-month rainfall wording
-M = nd.monthly[nd.monthly["district_id"] == did] if nd.available else \
-    pd.DataFrame(columns=["district_id", "variable", "year", "month", "value"])
+if not is_prov:
+    M = nd.monthly[nd.monthly["district_id"] == did] if nd.available else \
+        pd.DataFrame(columns=["district_id", "variable", "year", "month", "value"])
+if M is None or M.empty:
+    M = pd.DataFrame(columns=["district_id", "variable", "year", "month", "value"])
 window = [tuple(map(int, w.split("-"))) for w in nd.report.get("window", [])]
 nb = len(nd.report.get("baseline_seasons", []))
 
@@ -50,20 +74,20 @@ monthly_rain = {r["m"]: ((r["This season"] - r["Normal"]) / r["Normal"] * 100
                          if r["Normal"] and pd.notna(r["This season"]) else None)
                 for r in rain_m.to_dict("records")} if len(rain_m) else {}
 flds = [{"field_id": r.field_id, "risk_level": r.risk_level} for r in here.itertuples()] if len(here) else []
-it = interpret(d["district"], recs, NCFG["classes"], fields=flds, monthly_rain=monthly_rain, period_label=per)
+it = interpret(name, recs, NCFG["classes"], fields=flds, monthly_rain=monthly_rain, period_label=per)
 lab, col = LEVELS[it["level"]]
 
 with s2:
     if recs:
         ev = pd.DataFrame(recs.values())
-        st.download_button("Download evidence (CSV)", ev.to_csv(index=False).encode(), f"FieldPriority_{did}_evidence.csv",
+        st.download_button("Download evidence (CSV)", ev.to_csv(index=False).encode(), f"FieldPriority_{did.replace(':', '_')}_evidence.csv",
                            "text/csv", icon=":material/download:", width="stretch")
 
 html_block(f"""<div class="fp-ph"><div style="width:58px;height:58px;border-radius:16px;background:#D9A21B;display:grid;
-place-items:center">{icon("pin", 32, "#1F4D3A", 2.2)}</div><div style="flex:1"><div style="display:flex;gap:14px;
-align-items:center;flex-wrap:wrap"><h1>{E(d["district"])}</h1><span class="fp-badge lg" style="background:{col};color:#fff;
+place-items:center">{icon("layers" if is_prov else "pin", 32, "#1F4D3A", 2.2)}</div><div style="flex:1"><div style="display:flex;gap:14px;
+align-items:center;flex-wrap:wrap"><h1>{E(name)}</h1><span class="fp-badge lg" style="background:{col};color:#fff;
 padding:6px 15px;border-radius:999px;font-weight:600">{E(lab)}</span></div><div class="meta">
-<span>{icon("layers", 15, "#F2C74E")}{E(d["province"])} Province, Zambia</span>
+<span>{icon("layers", 15, "#F2C74E")}{E(sub) if not is_prov else f"{len(members)} districts, Zambia"}</span>
 <span>{icon("clock", 15, "#F2C74E")}Season data: {E(per)}</span>
 <span>{icon("field", 15, "#F2C74E")}{len(here)} monitored field(s)</span></div></div></div>""")
 if not nd.available:
@@ -96,23 +120,46 @@ with p1:
     maize = recs.get("maize_share_pct") or {}
     maize_txt = maize.get("display") if maize.get("status") == "ok" else "Not yet available (needs the WorldCereal maize map export)"
     fb = (f"{len(here)} monitored field(s) with digitised boundaries ({', '.join(sorted(set(here['pilot_short'])))} pilot)"
-          if len(here) else "No field boundaries in the platform for this district yet")
-    html_block(f"""<div class="fp-card"><div class="fp-kv">
-<div>Province</div><div>{E(d["province"])}</div>
-<div>District</div><div>{E(d["district"])}</div>
-<div>Area</div><div>{d["area_km2"]:,.0f} km²</div>
-<div>Central point</div><div>{d["lat"]:.4f}, {d["lon"]:.4f}</div>
+          if len(here) else f"No field boundaries in the platform for this {'province' if is_prov else 'district'} yet")
+    area = float(rows_d["area_km2"].sum())
+    if is_prov:
+        cen = rows_d.dissolve().geometry.iloc[0].representative_point()
+        lat, lon = cen.y, cen.x
+    else:
+        lat, lon = float(rows_d.iloc[0]["lat"]), float(rows_d.iloc[0]["lon"])
+    place = (f"<div>Province</div><div>{E(prov)}</div><div>Districts</div><div>{len(members)}</div>" if is_prov else
+             f"<div>Province</div><div>{E(rows_d.iloc[0]['province'])}</div>"
+             f"<div>District</div><div>{E(rows_d.iloc[0]['district'])}</div>")
+    html_block(f"""<div class="fp-card"><div class="fp-kv">{place}
+<div>Area</div><div>{area:,.0f} km²</div>
+<div>Central point</div><div>{lat:.4f}, {lon:.4f}</div>
 <div>Agricultural zone</div><div style="color:#7A8590">Not yet in the platform (agro-ecological region map to be added)</div>
 <div>Maize-growing status</div><div>{E(maize_txt)}</div>
 <div>Field boundaries</div><div>{E(fb)}</div>
 <div>Boundary source</div><div class="fp-sub">{E(nd.report.get("boundaries_source", ""))}</div>
 </div></div>""")
 with p2:
-    show_map(build_zambia_map(nd, "rainfall", here, focus=did), height=330)
+    show_map(build_zambia_map(nd, "rainfall", here, focus=members), height=330)
+
+if is_prov:
+    rows = ""
+    for r in rows_d.sort_values("district").itertuples():
+        rr = location_records(nd, r.district_id)
+        it_d = interpret(r.district, rr, NCFG["classes"])
+        lab_d, col_d = LEVELS[it_d["level"]]
+        cell = lambda k: E(str((rr.get(k) or {}).get("display") or "–"))
+        rows += (f'<tr><td><a href="{link("/location", district=r.district_id)}" target="_self"><b>{E(r.district)}</b></a></td>'
+                 f'<td>{cell("rainfall_anomaly_pct")}</td><td>{cell("temperature_deviation")}</td>'
+                 f'<td>{cell("water_stress")}</td><td><span style="color:{col_d};font-weight:600">{E(lab_d)}</span></td></tr>')
+    with st.expander(f"Districts in {prov} Province ({len(rows_d)}): open any district's own report", expanded=False):
+        html_block('<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.88rem">'
+                   '<tr style="text-align:left;color:#5E6B63"><th>District</th><th>Rainfall vs normal</th>'
+                   '<th>Temperature vs normal</th><th>Water stress</th><th>Assessment</th></tr>' + rows + '</table></div>')
 
 # ================================================================ 2. environmental conditions
 sec(2, "Environmental conditions", f"Season to date ({E(per)}) compared with the same months of the previous "
-    f"{nb} seasons. District averages: individual farms can differ.")
+    f"{nb} seasons. " + ("Province values are area-weighted averages of its districts" if is_prov else "District averages")
+    + ": individual farms can differ.")
 c = st.columns(3)
 r_tot = recs.get("rainfall_total") or {}
 c[0].markdown(card("Rainfall", recs.get("rainfall_anomaly_pct"),
@@ -134,7 +181,7 @@ def _style(ch):
                                                             titleColor="#5E6B63", gridColor="#ECE7DB")
 
 
-g1, g2, g3 = st.columns(3, gap="medium")
+g1, g2 = st.columns(2, gap="medium")
 with g1:
     if len(rain_m) and rain_m["This season"].notna().any():
         order = list(rain_m["Month"])
@@ -159,26 +206,49 @@ with g2:
                             legend=alt.Legend(orient="bottom", title=None)),
             tooltip=["Month", "Series", alt.Tooltip("°C:Q", format=".1f")])
         st.altair_chart(_style(ch.properties(title="Monthly temperature vs normal", height=230)), width="stretch")
-with g3:
-    S = nd.seasons[(nd.seasons["district_id"] == did)].dropna(subset=["rainfall_mm"]) if nd.seasons is not None else pd.DataFrame()
-    if len(S):
-        S = S.sort_values("season_start")
-        S["Season"] = S["season"]
-        S["current"] = S["current"].astype(str).str.lower().isin(["true", "1"])
-        S["Which"] = S["current"].map({True: "This season", False: "Earlier seasons"})
-        ch = alt.Chart(S).mark_bar(cornerRadiusEnd=3).encode(
-            x=alt.X("Season:O", title=None, sort=list(S["Season"]), axis=alt.Axis(labelAngle=-45)),
-            y=alt.Y("rainfall_mm:Q", title="Rainfall, same months (mm)"),
-            color=alt.Color("Which:N", scale=alt.Scale(domain=["This season", "Earlier seasons"],
-                                                       range=["#D9A21B", "#9DB8A5"]), legend=None),
-            tooltip=["Season", alt.Tooltip("rainfall_mm:Q", format=".0f", title="Rainfall (mm)"),
-                     alt.Tooltip("t2m:Q", format=".1f", title="Mean temp (°C)")])
-        st.altair_chart(_style(ch.properties(title="Seasonal comparison: the same months in each season", height=230)),
-                        width="stretch")
-        rank = S.sort_values("rainfall_mm").reset_index(drop=True)
-        pos = int(rank.index[rank["current"]][0]) + 1 if rank["current"].any() else None
-        if pos:
-            st.caption(f"This season ranks {pos} of {len(S)} from driest to wettest for these months.")
+
+# seasonal comparison: the same months in each of the last seasons, rainfall and temperature side by side
+if is_prov:
+    S = S_prov.copy()
+else:
+    S = nd.seasons[nd.seasons["district_id"] == did].copy() if nd.seasons is not None else pd.DataFrame()
+if len(S):
+    S = S.sort_values("season_start")
+    S["current"] = S["current"].astype(str).str.lower().isin(["true", "1"])
+    S["Which"] = S["current"].map({True: "This season", False: "Earlier seasons"})
+    S["Season"] = S["season"]
+    seasons_order = list(S["Season"])
+    h1, h2 = st.columns(2, gap="medium")
+    for col_, var, title, ytitle, fmt, colors in (
+            (h1, "rainfall_mm", "Rainfall in the same months, by season", "Rainfall (mm)", ".0f",
+             ["#D9A21B", "#9DB8A5"]),
+            (h2, "t2m", "Mean temperature in the same months, by season", "Mean temperature (°C)", ".1f",
+             ["#B9342B", "#9AA39D"])):
+        T = S.dropna(subset=[var])
+        if T.empty:
+            continue
+        with col_:
+            x = alt.X("Season:O", title=None, sort=seasons_order, axis=alt.Axis(labelAngle=-45, labelOverlap=False))
+            color = alt.Color("Which:N", scale=alt.Scale(domain=["This season", "Earlier seasons"], range=colors),
+                              legend=None)
+            tip = ["Season", alt.Tooltip(f"{var}:Q", format=fmt, title=ytitle)]
+            if var == "rainfall_mm":
+                ch = alt.Chart(T).mark_bar(cornerRadiusEnd=3).encode(x=x, y=alt.Y(f"{var}:Q", title=ytitle),
+                                                                     color=color, tooltip=tip)
+            else:
+                dom = [float(T[var].min()) - 0.5, float(T[var].max()) + 0.5]
+                y = alt.Y(f"{var}:Q", title=ytitle, scale=alt.Scale(domain=dom))
+                ch = alt.Chart(T).mark_line(color="#CFC6B2", strokeWidth=2).encode(x=x, y=y) + \
+                    alt.Chart(T).mark_point(filled=True, size=110).encode(x=x, y=y, color=color, tooltip=tip)
+            mean = alt.Chart(pd.DataFrame({"y": [float(T[~T["current"]][var].mean())]})).mark_rule(
+                color="#1E2A24", strokeDash=[4, 3]).encode(y="y:Q")
+            st.altair_chart(_style((ch + mean).properties(title=title, height=240, padding={"top": 14, "left": 4, "right": 4, "bottom": 4})).configure_title(anchor="start", offset=8),
+                            width="stretch")
+            rank = T.sort_values(var).reset_index(drop=True)
+            if rank["current"].any():
+                pos = int(rank.index[rank["current"]][0]) + 1
+                st.caption(f"This season ranks {pos} of {len(T)} from " + ("driest to wettest" if var == "rainfall_mm"
+                           else "coolest to warmest") + " for these months. Dashed line: the normal.")
 
 # ================================================================ 3. crop condition and verification
 sec(3, "Crop condition and verification", "Ground evidence and satellite observations of the crop itself.")
@@ -198,11 +268,33 @@ if len(here):
                'greenness (10 m) and the drought-stress rules for the field period '
                + E(", ".join(sorted(set(str(p) for p in here["period"])))) + '. Open a field for its photos, satellite '
                'trends and visit records.</div></div>')
+    pics = [(r.field_id, k, when, a) for r in here.itertuples() for k, when, a in (r.pics or [])]
+    if pics:
+        html_block(f'<div class="fp-panel-h" style="margin-top:.8rem"><span>{icon("camera", 18, "#1F4D3A")} '
+                   f'Photographic evidence from field visits</span>{type_tag("field_observation")}</div>')
+        pc = st.columns(4)
+        shown = 0
+        for i, (fid, kind, when, a) in enumerate(pics[:8]):
+            img = kobo_photo(a.get("download_medium_url") or a.get("download_url"))
+            with pc[i % 4]:
+                if img:
+                    st.image(img, caption=f"Field {fid} · {kind} · {when}", width="stretch")
+                    shown += 1
+                else:
+                    html_block(f'<div class="fp-photo">{icon("camera", 20, "#1F4D3A")} <b>Field {E(str(fid))}: '
+                               f'{kind} photo</b> · {E(str(when))}<br><a href="'
+                               f'{E(str(a.get("download_medium_url") or a.get("download_url")))}" target="_blank">'
+                               f'Open in KoboToolbox</a></div>')
+        if len(pics) > 8:
+            st.caption(f"{len(pics) - 8} more photo(s) in the field profiles.")
+        if not shown:
+            st.caption("Photos open in KoboToolbox (sign-in needed). To show them here, add KOBO_TOKEN to the "
+                       "app's secrets.")
 else:
-    empty(f"No monitored fields and no field reports in {E(d['district'])} yet. Crop identification, growth stage and "
+    empty(f"No monitored fields and no field reports in {E(name)} yet. Crop identification, growth stage and "
           "photographic evidence come from field visits (KoboToolbox) to monitored fields.")
 veg = recs.get("vegetation_anomaly_pct") or {}
-st.caption("District satellite vegetation: " + (veg.get("display") if veg.get("status") == "ok" else
+st.caption(("Province" if is_prov else "District") + " satellite vegetation: " + (veg.get("display") if veg.get("status") == "ok" else
            "not yet available (MODIS NDVI district export pending).") + " Crop type at district level: "
            + ("see maize-growing status above." if (recs.get("maize_share_pct") or {}).get("status") == "ok"
               else "not yet mapped."))

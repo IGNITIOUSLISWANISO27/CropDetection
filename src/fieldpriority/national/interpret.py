@@ -128,7 +128,7 @@ def interpret(name, recs, c, fields=None, monthly_rain=None, period_label=""):
                          "it is worth watching in the coming months.")
     elif have:
         paras.append(f"In {name}, {', '.join(concern + calm)}{when}. The available indicators do not point to "
-                     "moisture stress at district level" + (", although warmer weather increases crop water demand."
+                     "moisture stress for this area as a whole" + (", although warmer weather increases crop water demand."
                                                             if concern else "."))
     if calm and moist:
         paras.append("Other indicators are reassuring: " + ", ".join(calm) + ".")

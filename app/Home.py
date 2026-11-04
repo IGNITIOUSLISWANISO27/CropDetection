@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import streamlit as st
 
-st.set_page_config(page_title="FieldPriority · Agricultural intelligence for Zambia", page_icon=":material/agriculture:",
+st.set_page_config(page_title="FieldPriority · Integrated Agricultural & Environmental Intelligence", page_icon=":material/agriculture:",
                    layout="wide", initial_sidebar_state="collapsed")
 from _lib import CSS, CSS_V2, CSS_V3, load_data
 

@@ -17,7 +17,7 @@ html_block(f"""
   <p>Connecting crop conditions, rainfall, temperature, water stress and solar potential to deliver
   location-specific agricultural intelligence.</p>
   <div class="chips"><span class="chip">MAIZE FIRST</span><span class="chip o">LOCATION-BASED</span></div>
-  <div class="explore"><b>Explore agricultural conditions by location:</b> districts · individual fields
+  <div class="explore"><b>Explore agricultural conditions by location:</b> provinces · districts · individual fields
   <span style="opacity:.75">(agro-ecological zones next)</span></div>
   <a class="fp-btn gold" href="{link('/location')}" target="_self">{icon("doc", 18)} Open a location report →</a>
   <a class="fp-btn ghost" href="{link('/map')}" target="_self">{icon("layers", 18)} Explore the map</a>
@@ -49,13 +49,24 @@ with right:
     with st.container(border=True):
         html_block(f'<div class="fp-panel-h"><span>{icon("pin", 18, "#1F4D3A")} Explore by location</span></div>')
         D = nd.districts.sort_values("district")
-        opts = ["district:" + d for d in D["district_id"]] + ["field:" + f"{r.pilot}|{r.field_id}" for r in F.itertuples()]
+        provs = sorted(D["province"].unique())
+        opts = (["province:" + p for p in provs] + ["district:" + d for d in D["district_id"]]
+                + ["field:" + f"{r.pilot}|{r.field_id}" for r in F.itertuples()])
         names = dict(zip(D["district_id"], D["district"] + " · " + D["province"]))
-        pick = st.selectbox("District or field", opts, index=None, placeholder="Type a district or field…",
-                            format_func=lambda o: (names[o[9:]] + " (district)") if o.startswith("district:")
-                            else f"Field {o.split('|')[1]} · {o[6:].split('|')[0].title()} pilot")
+
+        def _fmt(o):
+            if o.startswith("province:"):
+                return f"{o[9:]} Province (all its districts)"
+            if o.startswith("district:"):
+                return names[o[9:]] + " (district)"
+            return f"Field {o.split('|')[1]} · {o[6:].split('|')[0].title()} pilot"
+        pick = st.selectbox("Province, district or field", opts, index=None,
+                            placeholder="Type a province, district or field…", format_func=_fmt)
         if pick:
-            if pick.startswith("district:"):
+            if pick.startswith("province:"):
+                st.page_link("views/location.py", label="Open the province report", icon=":material/arrow_forward:",
+                             query_params={"province": pick[9:]})
+            elif pick.startswith("district:"):
                 st.page_link("views/location.py", label="Open the location report", icon=":material/arrow_forward:",
                              query_params={"district": pick[9:]})
             else:
@@ -91,6 +102,18 @@ with right:
                 st.caption(f"{len(rows) - 6} more on the map.")
 
 # ---------------------------------------------------------------- the framework: six connected layers
+# ---------------------------------------------------------------- platform identity (brief section 6)
+caps = ["Geospatial agricultural monitoring", "Crop and vegetation condition assessment",
+        "Rainfall and temperature analysis", "Water stress monitoring", "Ground-based observation and verification",
+        "Integrated risk interpretation and decision support"]
+html_block(f"""<div class="fp-ident"><div class="l"><div class="fp-eyebrow" style="color:#F2C74E">About the platform</div>
+<h2>Integrated Agricultural &amp; Environmental Intelligence Platform</h2>
+<p>Transforms fragmented environmental and agricultural information into location-specific intelligence that supports
+early awareness, agricultural planning and informed decision-making.</p>
+<div class="foc"><span><b>Initial focus</b>Zambia</span><span><b>Primary agricultural focus</b>Maize-growing areas</span>
+</div></div><div class="r"><div class="h">Core capabilities</div><ul class="fp-act-list" style="margin:0;padding:0">
+{"".join(f"<li>{E(x)}</li>" for x in caps)}</ul></div></div>""")
+
 html_block(f'<div class="fp-section">{icon("layers", 20, "#1F4D3A")}One location, six connected layers of evidence</div>'
            '<div class="fp-sub">Each layer feeds the same location report; none is a separate dashboard.</div>')
 sm_ok = bool(nd.available and ((nd.indicators["indicator"] == "soil_moisture_anomaly_pct")
