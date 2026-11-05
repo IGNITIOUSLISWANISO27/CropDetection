@@ -6,11 +6,11 @@ import streamlit as st
 
 st.set_page_config(page_title="FieldPriority · Integrated Agricultural & Environmental Intelligence", page_icon=":material/agriculture:",
                    layout="wide", initial_sidebar_state="collapsed")
-from _lib import CSS, CSS_V2, CSS_V3, CSS_ZMD, CSS_V4, load_data
+from _lib import CSS, CSS_V2, CSS_V3, CSS_ZMD, CSS_V4, CSS_V5, load_data
 
 A_DIR = Path(__file__).resolve().parent / "assets"
 st.logo(str(A_DIR / "logo_wordmark.svg"), size="large")
-st.markdown(CSS + CSS_V2 + CSS_V3 + CSS_ZMD + CSS_V4, unsafe_allow_html=True)
+st.markdown(CSS + CSS_V2 + CSS_V3 + CSS_ZMD + CSS_V4 + CSS_V5, unsafe_allow_html=True)
 
 # ---- pilot area (Solwezi, Chongwe, ...) for the field pages, kept in the URL as ?area=
 from _lib import PILOTS, _cfg
@@ -20,7 +20,7 @@ if "pilot" not in st.session_state:
 elif qa in PILOTS and qa != st.session_state.get("_area_seen"):
     st.session_state["pilot"] = qa          # a link to another pilot's field (the URL changed, not the switch)
 V = Path(__file__).resolve().parent / "views"
-FIELD_PAGES = {"field-map", "assessments", "risk-analysis", "data-quality", "reports"}
+FIELD_PAGES = {"field-map", "assessments", "data-quality", "reports"}
 pages = {
     "": [st.Page(V / "overview.py", title="Overview", icon=":material/dashboard:", default=True),
          st.Page(V / "location.py", title="Location Intelligence", icon=":material/location_on:", url_path="location"),
@@ -30,7 +30,6 @@ pages = {
     "Pilot fields": [
         st.Page(V / "field_map.py", title="Field Map", icon=":material/map:", url_path="field-map"),
         st.Page(V / "assessments.py", title="Assessments", icon=":material/assignment:", url_path="assessments"),
-        st.Page(V / "risk_analysis.py", title="Risk Analysis", icon=":material/monitoring:", url_path="risk-analysis"),
         st.Page(V / "data_quality.py", title="Data Quality", icon=":material/fact_check:", url_path="data-quality"),
         st.Page(V / "reports.py", title="Reports", icon=":material/description:", url_path="reports")],
 }

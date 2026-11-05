@@ -235,12 +235,50 @@ def interpret(name, recs, c, fields=None, monthly_rain=None, period_label=""):
         nxt.append("Keep monitoring monthly")
     if level == "unknown":
         nxt.append("Fill the missing data layers (monthly update)")
+    together = combined_story(rc, sc, vc, tc, flagged, fields, solar if stress else None, have)
     short = {"concern": head, "normal": "Conditions close to or better than normal",
              "unknown": head}.get(level) or "Early sign: " + moist[0].replace("root-zone soil moisture", "soil moisture")
-    return {"level": level, "headline": head, "short": short, "paragraphs": paras, "maize": maize, "gaps": gaps,
+    return {"level": level, "headline": head, "short": short, "together": together, "paragraphs": paras, "maize": maize, "gaps": gaps,
             "considerations": cons, "concern": concern, "why": why, "next": nxt, "classes": {"rainfall": rc, "temperature": tc,
                                                                    "vegetation": vc, "soil_moisture": sc,
                                                                    "water_stress": ws}}
+
+
+def combined_story(rc, sc, vc, tc, flagged, fields, solar, have):
+    """One or two plain sentences on what the layers mean TOGETHER (the platform's core idea)."""
+    if not have:
+        return "Not enough data yet to connect the layers."
+    dry = rc in ("Very dry", "Drier than normal")
+    wet = rc == "Wetter than normal"
+    soil_low = sc in ("Well below normal", "Below normal")
+    veg_low = vc in ("Well below normal", "Below normal")
+    soil_known, veg_known = sc is not None, vc is not None
+    if dry and soil_low and veg_low:
+        t = "Less rain has dried the soil, and crop greenness has fallen: the crop is likely feeling it."
+    elif dry and soil_low:
+        t = ("Less rain has dried the soil, but crop greenness has not fallen yet: a window to act early."
+             if veg_known else "Less rain has dried the soil; crop greenness is not yet measured here.")
+    elif dry and soil_known:
+        t = "Rain is below normal, but soil water is holding up so far."
+    elif dry:
+        t = "Rain is below normal; soil water is not yet measured here."
+    elif soil_low:
+        t = ("Rain is " + ("above" if wet else "close to") + " normal, but the soil holds less water than usual"
+             + (", and crop greenness has fallen." if veg_low else "; the crop has not reacted yet." if veg_known else "."))
+    elif veg_low:
+        t = ("Crop greenness is below normal although water is not short: other causes (pests, disease, "
+             "nutrients) are more likely than drought.")
+    else:
+        t = ("Rain, soil water and crop greenness are all at or above normal." if soil_known and veg_known else
+             "Rain is " + ("above" if wet else "close to") + " normal.")
+    if tc in ("Much warmer than normal", "Warmer than normal"):
+        t += " Warmer weather adds to crop water demand."
+    if fields:
+        t += (f" {len(flagged)} of {len(fields)} monitored field(s) flagged." if flagged else
+              f" No monitored field is flagged.")
+    if solar is not None:
+        t += f" Strong sun ({solar:.1f} kWh/m²/day) could power pumping where water exists."
+    return t
 
 
 LEVELS = {"concern": ("Possible moisture stress", "#B9342B"), "watch": ("Watch", "#D9A21B"),

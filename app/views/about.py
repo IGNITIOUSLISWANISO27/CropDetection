@@ -20,7 +20,18 @@ early awareness, agricultural planning and informed decision-making.</p>
 </div></div><div class="r"><div class="h">Core capabilities</div><ul class="fp-act-list" style="margin:0;padding:0">
 {"".join(f"<li>{E(x)}</li>" for x in caps)}</ul></div></div>""")
 
-tab1, tab2, tab3 = st.tabs(["Layers of evidence", "How it works", "Accuracy"])
+tab0, tab1, tab2, tab3 = st.tabs(["What makes it different", "Layers of evidence", "How it works", "Accuracy"])
+with tab0:
+    html_block('<div class="fp-q3">'
+               '<div class="q"><div class="k">Others show layers</div><div class="a">Separate maps and bulletins</div>'
+               '<div class="s">Rainfall maps, vegetation indices and weather bulletins each answer one question; the '
+               'user has to combine them.</div></div>'
+               '<div class="q"><div class="k">FieldPriority connects them</div><div class="a">One answer per location'
+               '</div><div class="s">Weather → soil water → crop response → options, read together for a district, '
+               'zone, province or field: what is happening, why it matters, what next.</div></div>'
+               '<div class="q"><div class="k">And checks itself</div><div class="a">Evidence and verification</div>'
+               '<div class="s">Every value carries its source, date and confidence; alerts are verified in the field '
+               'and the 2023/24 drought was replayed to test it.</div></div></div>')
 with tab1:
     sm_ok = bool(nd.available and ((nd.indicators["indicator"] == "soil_moisture_anomaly_pct")
                                    & (nd.indicators["status"] == "ok")).any())

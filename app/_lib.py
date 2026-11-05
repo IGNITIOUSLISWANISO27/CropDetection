@@ -1388,7 +1388,8 @@ def signal_chain_html(recs, fields=None, together=""):
     for i, (g, nodes) in enumerate(groups):
         cols.append(f'<div class="fp-grp"><div class="gh">{E(g)}</div>{"".join(nodes)}</div>')
         if i < len(groups) - 1:
-            cols.append('<div class="fp-arr">→</div>')
+            cols.append(f'<div class="fp-arr"><span>→</span><small>{("fills the soil", "feeds the crop", "what can help")[i]}'
+                        '</small></div>')
     return (f'<div class="fp-chain">{"".join(cols)}</div>'
             + (f'<div class="fp-together"><b>Together:</b> {E(together)}</div>' if together else ""))
 
@@ -1426,7 +1427,9 @@ CSS_V4 = """
 .fp-chain{display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto .8fr;gap:8px;align-items:center}
 .fp-grp{display:flex;flex-direction:column;gap:7px}
 .fp-grp .gh{font:700 .7rem var(--fb);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:center}
-.fp-arr{font:700 1.5rem var(--fb);color:#B8B09A}
+.fp-arr{display:flex;flex-direction:column;align-items:center;color:#B8B09A;margin-top:14px}
+.fp-arr span{font:700 1.5rem/1 var(--fb)}
+.fp-arr small{font:600 .62rem var(--fb);text-transform:uppercase;letter-spacing:.06em;color:#9A927C;white-space:nowrap}
 .fp-node{border:1px solid;border-radius:12px;padding:8px 11px;cursor:help}
 .fp-node .h{font:700 .78rem var(--fb);display:flex;gap:5px;align-items:center}
 .fp-node .v{font:800 1.25rem/1.15 var(--fh);color:var(--ink);margin-top:2px}
@@ -1441,5 +1444,125 @@ CSS_V4 = """
 .fp-watch .s{color:var(--muted);font-size:.8rem;margin-left:auto;text-align:right}
 @media (max-width: 1000px){ .fp-q3{grid-template-columns:1fr} .fp-chain{grid-template-columns:1fr} .fp-arr{transform:rotate(90deg);
   justify-self:center} }
+</style>
+"""
+
+
+
+# ---------------------------------------------------------------- homepage pieces
+@st.cache_data(show_spinner=False)
+def _hero_b64():
+    import base64
+    p = ROOT / "app" / "assets" / "hero_farmer.jpg"
+    return base64.b64encode(p.read_bytes()).decode() if p.exists() else ""
+
+
+def hero_photo_html(inner):
+    b = _hero_b64()
+    img = (f'<div class="ph" style="background-image:url(data:image/jpeg;base64,{b})"></div>' if b else
+           f'<div class="ph">{hero_landscape_svg()}</div>')
+    return f'<div class="fp-hero2"><div class="tx">{inner}</div>{img}</div>'
+
+
+def signal_list_html(recs, fields=None):
+    """The connected layers as a compact vertical chain (homepage spotlight)."""
+    rows = []
+    f = fields if fields is not None else pd.DataFrame()
+    items = [("Weather", "Rainfall", "drop", recs.get("rainfall_anomaly_pct")),
+             ("", "Temperature", "thermo", recs.get("temperature_deviation")),
+             ("Water", "Soil moisture", "drop", recs.get("soil_moisture_anomaly_pct")),
+             ("", "Water stress", "gauge", recs.get("water_stress")),
+             ("Crop", "Vegetation", "leaf", recs.get("vegetation_anomaly_pct"))]
+    for g, t, ic, rec in items:
+        ok = bool(rec) and rec.get("status") == "ok"
+        cls = (rec or {}).get("class") if ok else None
+        st_ = "none" if not ok else "bad" if cls in _BAD else "warn" if cls in _WARN else "ok"
+        v = ((rec.get("class") if t == "Water stress" else str(rec.get("display")).split(" · ")[0]) if ok else "–")
+        rows.append((g, t, ic, v, st_))
+    if len(f):
+        hi = int(f["risk_level"].isin(["High", "Moderate", "Not attributed"]).sum())
+        rows.append(("", "Monitored fields", "camera", f"{len(f)} · {hi} flagged", "bad" if hi else "ok"))
+    sol = recs.get("solar_resource") or {}
+    rows.append(("Options", "Solar for pumping", "sun", str(sol.get("display", "–")).split(" · ")[0]
+                 if sol.get("status") == "ok" else "–", "info"))
+    out = ""
+    for g, t, ic, v, st_ in rows:
+        fg, bg = STATE[st_]
+        out += ((f'<div class="g">{E(g)}</div>' if g else "")
+                + f'<div class="r"><i style="background:{fg}"></i>{icon(ic, 14, fg)}<span>{E(t)}</span>'
+                f'<b>{E(v)}</b></div>')
+    return f'<div class="fp-vchain">{out}</div>'
+
+
+def national_answers(nd, fields):
+    """Zambia as a whole: (what, what_sub, why, why_sub, next list, colour) from live data only."""
+    I = nd.indicators if nd.available else pd.DataFrame(columns=["indicator", "status", "value", "class", "location_id"])
+    ok = lambda ind: I[(I["indicator"] == ind) & (I["status"] == "ok")]
+    rain, ws, mz = ok("rainfall_anomaly_pct"), ok("water_stress"), ok("maize_share_pct")
+    if not len(rain):
+        return ("District layers not built yet", "Run the monthly update.", "–", "", ["Run monthly_update.bat"], "#7A8590")
+    med = float(pd.to_numeric(rain["value"], errors="coerce").median())
+    dry = rain[rain["class"].isin(["Very dry", "Drier than normal"])]
+    wet = rain[rain["class"] == "Wetter than normal"]
+    stress = ws[ws["class"].isin(["Likely water stress", "Possible water stress", "Early sign: rainfall deficit"])]
+    names = nd.districts.set_index("district_id")["district"]
+    if len(dry) > len(rain) / 3:
+        what, colr = f"Drier than normal in {len(dry)} of {len(rain)} districts", "#B9342B"
+    elif len(wet) > len(rain) / 3:
+        what, colr = "A wetter-than-normal season in much of Zambia", "#2E8B57"
+    else:
+        what, colr = "A near-normal season in most districts", "#2E8B57"
+    sub = f"Median rainfall {med:+.0f}% vs normal ({period_of(nd)})."
+    if len(stress):
+        sub += (f" {len(stress)} district(s) with signs of water stress: "
+                + ", ".join(names.get(d, d) for d in stress["location_id"][:4]) + ".")
+    mzd = set(mz[pd.to_numeric(mz["value"], errors="coerce") >= NCFG["classes"]["maize_share_pct"]]["location_id"])
+    hit = sorted(set(stress["location_id"]) & mzd)
+    if mzd:
+        why = (f"{len(hit)} of {len(mzd)} maize-growing districts show stress." if hit else
+               f"None of the {len(mzd)} maize-growing districts shows water stress.")
+    else:
+        why = f"{len(stress)} district(s) show water stress."
+    why_sub = "Maize is Zambia's staple: stress in maize areas affects food security and income."
+    nxt = []
+    if len(stress):
+        nxt.append(f"Check the {len(stress)} district(s) to watch")
+    spec, S, _, _ = zmd_seasonal()
+    if spec is not None and len(S):
+        d = S[S["period"] == "DJF"]
+        nb = int((d["rank"] <= 2).sum())
+        if nb > len(d) / 2:
+            nxt.append(f"Prepare for a drier Dec–Feb: ZMD expects it in {nb} districts")
+    nxt.append("Open any district for its full picture")
+    return what, sub, why, why_sub, nxt, colr
+
+
+CSS_V5 = """
+<style>
+.fp-hero2{display:grid;grid-template-columns:1fr 1.15fr;border-radius:22px;overflow:hidden;min-height:330px;
+  box-shadow:0 10px 30px rgba(20,35,58,.15);margin-bottom:1rem;background:var(--forest)}
+.fp-hero2 .tx{padding:34px 40px;color:#E8EFE9;display:flex;flex-direction:column;justify-content:center}
+.fp-hero2 .tx .tag{display:inline-flex;gap:8px;align-items:center;font:600 .74rem var(--fb);letter-spacing:.09em;
+  text-transform:uppercase;color:#F2C74E;margin-bottom:.4rem}
+.fp-hero2 h1{color:#fff !important;font-size:2.2rem;line-height:1.1;margin:.2rem 0 .7rem}
+.fp-hero2 h1 .gold{color:#F2C74E !important}
+.fp-hero2 p{margin:0 0 1rem;font-size:1rem;line-height:1.5}
+.fp-hero2 .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.1rem}
+.fp-hero2 .chip{font:700 .7rem var(--fb);letter-spacing:.1em;color:#1E2A24;background:#F2C74E;padding:4px 10px;border-radius:6px}
+.fp-hero2 .chip.o{background:transparent;color:#F2C74E;border:1px solid rgba(242,199,78,.6)}
+.fp-hero2 .ph{background-size:cover;background-position:28% 30%;min-height:330px;position:relative}
+.fp-hero2 .ph svg{width:100%;height:100%}
+.fp-hero2 .ph:after{content:"Environmental change. People's livelihoods.";position:absolute;right:18px;bottom:16px;
+  font:italic 600 1.05rem Georgia,serif;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.fp-vchain{position:relative;margin:.2rem 0 .4rem}
+.fp-vchain .g{font:700 .64rem var(--fb);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:7px 0 2px}
+.fp-vchain .r{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:8px;background:#fff;
+  border:1px solid var(--line);margin-bottom:4px;font-size:.86rem}
+.fp-vchain .r i{width:8px;height:8px;border-radius:50%;flex:none}
+.fp-vchain .r b{margin-left:auto;font-weight:700}
+.fp-spot h3{margin:0;font-size:1.3rem}
+@media (max-width: 900px){ .fp-hero2{grid-template-columns:1fr} .fp-hero2 .ph{min-height:220px} }
+@media (max-width: 640px){ .fp-hero2 .tx{padding:22px 20px} .fp-hero2 h1{font-size:1.55rem} .fp-hero2 p{font-size:.92rem}
+  .fp-loc h1{font-size:1.5rem} .fp-loc .lvl{margin-left:0} }
 </style>
 """

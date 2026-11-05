@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 from _lib import (get_data, page_title, section, kpi, html_block, badge, src_tag, visits, verification_status,
                   status_by_field, field_location, period_text, period_year, sort_by_risk, build_map, show_map,
-                  trend_chart, issue_labels, empty, icon, attachments, kobo_photo, RISK, RISK_ORDER, E, C)
+                  trend_chart, issue_labels, empty, icon, attachments, kobo_photo, RISK, RISK_ORDER, CFG, E, C)
 
 data = get_data()
 A = data.assessments
@@ -262,3 +262,27 @@ with tab2:
         if rows and show.iloc[rows[0]]["Field ID"] in set(A["field_id"]):
             st.query_params["field"] = show.iloc[rows[0]]["Field ID"]
             st.rerun()
+
+with st.expander("What each risk class means, and the method"):
+    for k in [k for k in RISK_ORDER if k != "Not assessed"]:
+        html_block(f'<div style="display:flex;gap:14px;align-items:flex-start;margin:4px 0">'
+                   f'<div style="min-width:150px">{badge(k)}</div><div>{E(RISK[k]["means"])}</div></div>')
+    r = CFG["rules"]
+    w, veg = r["water_deficit"], r["vegetation"]
+    st.markdown(f"""
+FieldPriority flags **possible drought-related maize stress**. It never confirms drought; field verification does.
+
+- **Water deficit** (rule 4): rainfall in the assessment month (or the month before) at least
+  **{abs(w['rain_anomaly_pct_max']):.0f}% below** its CHIRPS 10-year normal, or root-zone soil moisture at least
+  **{abs(w['soil_moisture_anomaly_pct_max']):.0f}% below** its multi-year same-month mean.
+- **Vegetation decline**: Sentinel-2 NDVI down by at least **{abs(veg['decline_abs']):.2f}** and
+  **{abs(veg['decline_rel'])*100:.0f}%** against the reference ({'this season’s earlier peak' if veg['baseline'] == 'within_season' else 'the multi-year same-month mean'}); a drop of
+  **{abs(veg['severe_abs']):.2f}** or more is severe.
+- Deficit **and** decline → Moderate; High when the growth stage is known and the drop is severe or the crop is at a
+  sensitive stage ({', '.join(s.replace('_', ' ') for s in r['sensitive_stages'])}).
+  Deficit only → Watch. Decline only → Cause uncertain. Neither → Low. Missing inputs → Insufficient data (rule 7).
+- Drying at maturity is not counted as drought (rule 6). Risk level, data confidence and verification status are
+  kept separate (rule 9).
+
+All thresholds are **provisional** and set in `config/settings.yaml`; they still need agronomic review.
+""")

@@ -122,24 +122,17 @@ if not nd.available:
     st.stop()
 
 # ---------------------------------------------------------------- 1. the three answers
-short_sig = []
-for k, t in (("rainfall_anomaly_pct", "Rain"), ("soil_moisture_anomaly_pct", "Soil moisture"),
-             ("vegetation_anomaly_pct", "Vegetation"), ("temperature_deviation", "Temp.")):
-    r = recs.get(k) or {}
-    if r.get("status") == "ok":
-        short_sig.append(f"{t} {str(r['display']).split(' · ')[0]}")
-what_sub = " · ".join(short_sig) + " vs normal" if short_sig else "No indicators yet"
+what_sub = it["together"]
 why_sub = (f"{mz['class']} {kind} ({float(mz['value']):.0f}% of land under maize)." if mz.get("status") == "ok" else "")
 why_sub += (" " + it["why"][1]) if len(it["why"]) > 1 else ""
 html_block(answer_cards_html(it["short"], E(what_sub), it["why"][0], E(why_sub.strip()), it["next"] or
                              ["Keep monitoring monthly"], col))
 
 # ---------------------------------------------------------------- 2. the connected evidence
-first = ". ".join(it["paragraphs"][0].split(". ")[:2]).rstrip(".") + "." if it["paragraphs"] else ""
 with st.container(border=True):
-    html_block(f'<div class="fp-panel-h"><span>{icon("layers", 18, "#1F4D3A")} How the signals connect</span>'
-               f'<span class="fp-mini">Hover a box for its source and date</span></div>')
-    html_block(signal_chain_html(recs, here, first))
+    html_block(f'<div class="fp-panel-h"><span>{icon("layers", 18, "#1F4D3A")} Six layers, one picture</span>'
+               f'<span class="fp-mini">Hover any box for its source, date and confidence</span></div>')
+    html_block(signal_chain_html(recs, here))
 
 # official outlook (ZMD), one line
 zspec, ZS, ZON, _ = zmd_seasonal()
