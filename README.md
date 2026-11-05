@@ -51,6 +51,15 @@ A pilot's moved season is recorded in `data/<pilot>/current_season.json` (delete
 District boundaries: geoBoundaries gbOpen ADM2 (`config/zambia_districts.geojson`). Note: two Chongwe pilot fields
 (F001, F002) fall inside Rufunsa district on these boundaries.
 
+## Drought test (district layers vs the 2023/24 drought)
+`run_drought_test.bat` (`python -m fieldpriority.national.drought_test [--offline]`) rebuilds the district layers
+for past periods with the live code and thresholds, and compares each district's assessment (watch or concern =
+flagged) with what happened (`config/drought_test_2024.yaml`): the 2023/24 drought (84 districts in Central,
+Copperbelt, Eastern, Lusaka, North-Western, Southern and Western declared affected; national disaster 29 Feb 2024)
+and the good 2024/25 season as a control. Results: `outputs/drought_test/DROUGHT_TEST_RESULTS.md`, `summary.json`,
+`district_results.csv`. The live layers in `outputs/national/` are not touched. The run prints a fingerprint of
+the thresholds and rules, so any later change to them is visible.
+
 ## Weather & warnings (Zambia Meteorological Department), from November 2026
 Page *Weather & Warnings* (`app/views/weather.py`, logic in `src/fieldpriority/zmd.py`) shows ZMD's official
 information by district. FieldPriority does not issue forecasts or warnings; ZMD's content is shown unchanged with a

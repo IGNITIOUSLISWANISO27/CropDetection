@@ -1,0 +1,29 @@
+# Known outcome used to test the district layers: the 2023/24 El Niño drought.
+# Thresholds in config/national.yaml were NOT changed after seeing this test (the run prints their fingerprint).
+event: "2023/24 drought"
+declared: "2024-02-29"         # President Hichilema declared a national disaster and emergency
+reference:
+  affected_districts: 84        # of 116, "significantly affected by delayed onset of rains and prolonged dry spells"
+  affected_provinces: [Central, Copperbelt, Eastern, Lusaka, North-Western, Southern, Western]
+  not_affected_provinces: [Northern, Luapula, Muchinga]
+  note: "The government counts 84 affected districts in these seven provinces, which together have 83 districts on
+    the boundary map used here (84 on the official list). Every district in the seven provinces is therefore treated
+    as affected, and the three northern provinces as not affected. District-level severity was not published."
+  sources:
+    - "DMMU Food Security Drought Response Plan, April 2024: 84 of 116 districts in seven provinces significantly
+      affected (https://agrifocusafrica.com/2024/05/06/republic-of-zambia-disaster-management-and-mitigation-unit-food-security-drought-response-plan-april-2024/)"
+    - "DMMU Drought Response Situation Report No. 2, 1 August 2024: 84 districts affected
+      (https://reliefweb.int/report/zambia/republic-zambia-disaster-management-and-mitigation-unit-drought-response-situation-report-no-2-1st-august-2024)"
+    - "Al Jazeera, 29 February 2024: national disaster declared
+      (https://www.aljazeera.com/news/2024/2/29/zambia-declares-national-disaster-after-drought-devastates-agriculture)"
+
+# Each run replays the system as it would have looked with the data available at that time.
+# run_date = end of the last month + the data delay in config/national.yaml (data_lag_days).
+runs:
+  - {name: "2023-24_to_Dec", period: "2023-11..2023-12", kind: drought}
+  - {name: "2023-24_to_Jan", period: "2023-11..2024-01", kind: drought}
+  - {name: "2023-24_to_Feb", period: "2023-11..2024-02", kind: drought}
+  - {name: "2023-24_to_Mar", period: "2023-11..2024-03", kind: drought}
+  # control: the good 2024/25 season (maize harvest 3.66 million t vs 1.5 million t in 2024): should stay quiet
+  - {name: "2024-25_to_Feb", period: "2024-11..2025-02", kind: control}
+  - {name: "2024-25_to_Mar", period: "2024-11..2025-03", kind: control}

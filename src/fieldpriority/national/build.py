@@ -165,8 +165,11 @@ def build(cfg=None, today=None, offline=False, log=print):
 
     # ---- agricultural zones (agro-ecological regions): official map if supplied, else rainfall approximation
     log("Agricultural zones")
-    zone_info, zone_polys, zone_src, zone_seasons = agro_zones(cfg, districts, bseasons, data_dir, caches, offline,
-                                                               available, log)
+    if cfg.get("skip_zones"):         # past-season replays (drought test) do not need the zones
+        zone_info, zone_polys, zone_src, zone_seasons = None, None, None, []
+    else:
+        zone_info, zone_polys, zone_src, zone_seasons = agro_zones(cfg, districts, bseasons, data_dir, caches,
+                                                                   offline, available, log)
     if zone_info is None:
         notes.append("Agricultural zones not computed: October and May rainfall for at least 5 baseline seasons is "
                      "needed (run the update with internet).")
