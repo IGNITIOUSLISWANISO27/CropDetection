@@ -9,6 +9,7 @@ pytest
 streamlit>=1.55
 folium
 altair
+requests                # ZMD weather warnings feed
 firebase-admin          # Firebase sync and the online dashboard
 reportlab
 openpyxl

@@ -51,6 +51,21 @@ A pilot's moved season is recorded in `data/<pilot>/current_season.json` (delete
 District boundaries: geoBoundaries gbOpen ADM2 (`config/zambia_districts.geojson`). Note: two Chongwe pilot fields
 (F001, F002) fall inside Rufunsa district on these boundaries.
 
+## Weather & warnings (Zambia Meteorological Department), from November 2026
+Page *Weather & Warnings* (`app/views/weather.py`, logic in `src/fieldpriority/zmd.py`) shows ZMD's official
+information by district. FieldPriority does not issue forecasts or warnings; ZMD's content is shown unchanged with a
+link to the original.
+
+| Part | Source | How it reaches the platform |
+|---|---|---|
+| Warnings and advisories | ZMD public CAP alert feed `https://zmd.gov.zm/api/cap/rss.xml` | read live (checked every 30 minutes); each alert matched to districts by ZMD's drawn area, else the places named. Last download saved in `data/zmd/alerts.json` (also by `monthly_update.bat`, or `python -m fieldpriority.zmd`) for when the feed is down |
+| Seasonal rainfall forecast 2026/27 | ZMD bulletin of 11 Sep 2026 | transcribed in `config/zmd_seasonal_forecast.yaml`; each statement placed on the districts it names (approximate where ZMD names only part of a province) |
+| Daily, weekly, 10-day agromet, sub-seasonal forecasts | zmd.gov.zm product pages | linked (published as web pages and documents, no data feed) |
+
+**Each new season**: replace `config/zmd_seasonal_forecast.yaml` with the new bulletin (same structure: periods,
+categories, places, onset, cessation, advisories). The homepage shows warnings in force (or the seasonal outlook in one
+line); each district report shows ZMD's categories, start of the rains, warnings in force and ZMD's advice for farmers.
+
 ## Current pilot: Solwezi (North-Western Province), from November 2026
 The project now runs on the Solwezi Earth Engine exports. The earlier Chongwe pilot (5 fields, Jan-Mar 2025,
 2024/2025 backtests) is retired: its outputs and original alert ledger are kept unchanged in `outputs/chongwe_archive/`,

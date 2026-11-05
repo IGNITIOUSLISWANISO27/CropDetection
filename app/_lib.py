@@ -885,7 +885,7 @@ def period_of(nd):
 
 TYPE_STYLE = {"measurement": ("#E3EEF9", "#1F4E80"), "satellite_estimate": ("#E3EEF9", "#1F4E80"),
               "model_output": ("#FFF1D6", "#7A5300"), "field_observation": ("#EDE6F7", "#4B2F7A"),
-              "derived": ("#E8F1EA", "#1F4D3A")}
+              "derived": ("#E8F1EA", "#1F4D3A"), "official": ("#FCE4DE", "#8A2A1C")}
 
 
 def type_tag(data_type):
@@ -1223,3 +1223,117 @@ CSS_V3 = """
   .fp-flow{grid-template-columns:1fr} .fp-flow .a{transform:rotate(90deg);justify-self:center} }
 </style>
 """
+
+
+# ---------------------------------------------------------------- official weather information (ZMD)
+from fieldpriority import zmd as ZMD  # noqa: E402
+ICONS["storm"] = ('<path d="M7 17a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 9a4 4 0 0 1-1 7.9"/><path d="m13 12-3 5h4l-3 5"/>')
+
+
+@st.cache_data(ttl=1800, show_spinner="Checking ZMD weather warnings")
+def _zmd_alert_doc():
+    doc, ok, err = ZMD.get_alerts(live=True, timeout=6)
+    return doc, ok, err, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+
+def zmd_alerts(nd=None):
+    """(table of alerts with matched districts, status dict). Live ZMD feed, else the saved copy."""
+    doc, ok, err, checked = _zmd_alert_doc()
+    nd = nd or national()
+    T = ZMD.alerts_table(doc, nd.districts)
+    return T, {"live": ok, "error": err, "checked": checked, "retrieved": (doc or {}).get("retrieved_at"),
+               "have": doc is not None}
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _zmd_seasonal(_key):
+    spec = ZMD.load_seasonal()
+    D = national().districts
+    if not spec:
+        return None, pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    return (spec, ZMD.seasonal_by_district(spec, D), ZMD.timing_by_district(spec, D, "onset"),
+            ZMD.timing_by_district(spec, D, "cessation"))
+
+
+def zmd_seasonal():
+    """(spec, per-district categories, onset, cessation) of the ZMD seasonal forecast."""
+    f = ZMD.SEASONAL_FILE
+    return _zmd_seasonal(f"{f.stat().st_mtime if f.exists() else 0}")
+
+
+def zmd_time(t, with_time=True):
+    t = ZMD.parse_time(t) if isinstance(t, str) else t
+    if t is None or (isinstance(t, float) and t != t):
+        return "–"
+    t = t.astimezone(dt.timezone(dt.timedelta(hours=2)))
+    return t.strftime("%d %b %Y, %H:%M" if with_time else "%d %b %Y").lstrip("0")
+
+
+def zmd_cat_chip(code, text=None, small=False):
+    if not code or code not in ZMD.CATEGORIES:
+        return (f'<span class="fp-zc" style="background:#EEE;color:#5E6B63">{E(text or "Not stated")}</span>')
+    _, lab, col = ZMD.CATEGORIES[code]
+    dark = code in ("normal_to_below", "normal", "normal_to_above")
+    return (f'<span class="fp-zc{" s" if small else ""}" style="background:{col};color:{"#1E2A24" if dark else "#fff"}">'
+            f'{E(text or lab)}</span>')
+
+
+def zmd_sev_chip(sev):
+    col = ZMD.SEVERITY.get(sev or "Unknown", ZMD.SEVERITY["Unknown"])[1]
+    return f'<span class="fp-zc" style="background:{col};color:#fff">{E(sev or "Unknown")}</span>'
+
+
+CSS_ZMD = """
+<style>
+.fp-zc{display:inline-block;padding:3px 10px;border-radius:999px;font:600 .8rem Inter,sans-serif;margin:2px 4px 2px 0}
+.fp-zc.s{padding:1px 8px;font-size:.74rem}
+.fp-zban{display:flex;gap:14px;align-items:center;border-radius:14px;padding:12px 18px;margin:.2rem 0 1rem;flex-wrap:wrap;
+  font-size:.92rem}
+.fp-zban .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;flex:none}
+.fp-zban a{font-weight:600;white-space:nowrap}
+.fp-zal{background:#fff;border:1px solid var(--line);border-left:6px solid #E7932A;border-radius:14px;padding:14px 18px;
+  margin-bottom:.8rem}
+.fp-zal h4{margin:.35rem 0 .3rem;font-size:1.05rem}
+.fp-zal .meta{color:var(--muted);font-size:.82rem}
+.fp-zal .do{background:#FFF8E6;border-radius:10px;padding:9px 12px;margin-top:.6rem;font-size:.9rem}
+.fp-ztl{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.fp-ztl > div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.fp-ztl .p{font:700 .8rem var(--fb);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.fp-ztl .x{font-size:.78rem;color:var(--muted);margin-top:4px;line-height:1.35}
+.fp-zprod{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.fp-zprod a{display:block;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 13px;
+  text-decoration:none !important;color:var(--ink) !important}
+.fp-zprod a b{display:block;font:700 .92rem var(--fh);color:var(--forest)}
+.fp-zprod a span{font-size:.8rem;color:var(--muted)}
+@media (max-width: 900px){ .fp-ztl,.fp-zprod{grid-template-columns:1fr 1fr} }
+</style>
+"""
+
+
+def zmd_banner(nd):
+    """One line for the homepage: ZMD warnings in force, else the seasonal outlook in one sentence."""
+    try:
+        T, st_ = zmd_alerts(nd)
+    except Exception:
+        T, st_ = pd.DataFrame(), {"have": False, "live": False}
+    act = T[T["active"]] if len(T) else T
+    if len(act):
+        top = act.sort_values("sev_rank", ascending=False).iloc[0]
+        nd_ = len(set().union(*[set(d) for d in act["districts"]]))
+        return (f'<div class="fp-zban" style="background:#FCE4DE;border:1px solid #F1B9AA;color:#5A1A10">'
+                f'<div class="ic" style="background:#B9342B;color:#fff">{icon("storm", 22)}</div><div style="flex:1;'
+                f'min-width:240px"><b>ZMD weather warnings in force: {len(act)}</b> · {nd_} district(s) · '
+                f'{E(top["headline"])} (until {E(zmd_time(top["expires_t"]))})</div>'
+                f'<a href="{link("/weather")}" target="_self">See warnings by district →</a></div>')
+    spec, S, _, _ = zmd_seasonal()
+    seas = ""
+    if spec is not None and len(S):
+        d = S[S["period"] == "DJF"]
+        nb = int((d["rank"] <= 2).sum())
+        seas = (f' · ZMD seasonal forecast {E(spec["season"])}: {nb} of {len(d)} districts normal-to-below or below '
+                f'normal in December–February (issued {E(zmd_time(spec["issued"] + "T12:00:00+02:00", False))})')
+    chk = ("No ZMD weather warnings in force" if st_.get("have") else "ZMD warnings could not be checked")
+    return (f'<div class="fp-zban" style="background:#EEF3F8;border:1px solid #CFDCE8;color:#14233A">'
+            f'<div class="ic" style="background:#1F4E80;color:#fff">{icon("storm", 22)}</div><div style="flex:1;'
+            f'min-width:240px"><b>{chk}</b>{seas}</div>'
+            f'<a href="{link("/weather")}" target="_self">Weather &amp; warnings →</a></div>')

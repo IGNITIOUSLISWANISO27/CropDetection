@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 from _lib import (html_block, icon, badge, national, monitored_fields, location_records, build_zambia_map, show_map,
                   period_of, type_tag, conf_tag, evidence_line, class_chip, empty, link, interpret, kobo_photo,
-                  LEVELS, NCFG, NMON, RISK, E, C)
+                  zmd_seasonal, zmd_alerts, zmd_cat_chip, zmd_time, ZMD, LEVELS, NCFG, NMON, RISK, E, C)
 
 nd = national()
 F = monitored_fields(nd)
@@ -213,6 +213,45 @@ c[0].markdown(card("Vegetation condition", recs.get("vegetation_anomaly_pct")), 
 c[1].markdown(card("Root-zone soil moisture", recs.get("soil_moisture_anomaly_pct")), unsafe_allow_html=True)
 c[2].markdown(card("Solar resource", recs.get("solar_resource")), unsafe_allow_html=True)
 
+# official outlook and warnings (ZMD), next to the observed conditions
+zspec, ZS, ZON, _ = zmd_seasonal()
+try:
+    ZT, zst = zmd_alerts(nd)
+except Exception:
+    ZT, zst = pd.DataFrame(), {"have": False}
+zact = ZT[ZT["active"] & ZT["districts"].map(lambda d: bool(set(d) & set(members)))] if len(ZT) else ZT
+zadv = []
+if zspec is not None and len(ZS):
+    Zm = ZS[ZS["district_id"].isin(members)]
+    if is_prov:
+        cells = ""
+        for p in ZMD.PERIOD_ORDER:
+            cnt = Zm[Zm["period"] == p]["code"].value_counts()
+            cells += (f'<div><b>{p}</b> ' + " ".join(zmd_cat_chip(k, f"{ZMD.CATEGORIES[k][1]}: {n}", small=True)
+                                                    for k, n in cnt.items()) + "</div>")
+        zline = f'<div class="fp-sub" style="margin-bottom:4px">Districts by ZMD forecast category</div>{cells}'
+    else:
+        Zr = Zm.set_index("period")
+        zline = " ".join(f'<span style="white-space:nowrap"><b>{p}</b> '
+                         + ("".join(zmd_cat_chip(c, small=True) for c in str(Zr.loc[p, "codes"]).split("|") if c)
+                            or zmd_cat_chip(None, small=True)) + '</span>'
+                         for p in ZMD.PERIOD_ORDER if p in Zr.index)
+        if Zr["split"].any():
+            zline += ('<div class="fp-sub" style="margin-top:2px">Two categories: ZMD gives different categories to '
+                      'parts of this district (see Weather &amp; warnings).</div>')
+        onset = ZON.set_index("district_id").loc[members[0], "text"]
+        zline += f'<div class="fp-sub" style="margin-top:4px">Start of the rains: {E(onset)}</div>'
+        zadv = ZMD.advisories_for(zspec, ZMD.district_ranks(ZS, members[0]))
+    warn = (f'<b style="color:#B9342B">{len(zact)} ZMD warning(s) in force</b>: ' + E("; ".join(zact["headline"]))
+            if len(zact) else ("No ZMD weather warning in force" if zst.get("have") else "ZMD warnings not checked"))
+    html_block(f'<div class="fp-card" style="margin-top:.7rem"><div class="fp-panel-h"><span>{icon("storm", 18, "#1F4E80")}'
+               f' Official outlook: ZMD seasonal rainfall forecast {E(zspec["season"])}</span>'
+               f'<a href="{link("/weather", district=None if is_prov else did)}" target="_self">Weather &amp; warnings →</a>'
+               f'</div>{zline}<div style="margin-top:6px;font-size:.9rem">{warn}</div>'
+               f'<div style="margin-top:6px">{type_tag("official")}<span class="fp-sub">Zambia Meteorological Department, '
+               f'issued {E(zmd_time(zspec["issued"] + "T12:00:00+02:00", False))}. A forecast of the coming season, '
+               f'not an observation.</span></div></div>')
+
 
 def _style(ch):
     return ch.configure_view(strokeWidth=0).configure_axis(labelFont="Inter", titleFont="Inter", labelColor="#5E6B63",
@@ -357,6 +396,11 @@ sec(5, "Practical considerations", "Possible next steps to discuss. The platform
     "make them.")
 html_block('<div class="fp-card"><ul class="fp-act-list" style="margin:0;padding:0">'
            + "".join(f"<li>{E(x)}</li>" for x in it["considerations"]) + "</ul></div>")
+if zadv:
+    html_block('<div class="fp-card" style="margin-top:.7rem"><h4>ZMD advice for farmers in this district</h4>'
+               '<ul class="fp-att">' + "".join(f"<li>{E(x)}</li>" for x in zadv) + '</ul><div>' + type_tag("official")
+               + '<span class="fp-sub">From the ZMD seasonal rainfall forecast bulletin, chosen by the categories '
+               'ZMD gives this district.</span></div></div>')
 
 # ================================================================ evidence register
 with st.expander("Evidence register: every indicator with its source, date, coverage and confidence"):

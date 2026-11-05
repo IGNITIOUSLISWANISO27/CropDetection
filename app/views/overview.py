@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 from _lib import (html_block, hero_landscape_svg, icon, footer, national, monitored_fields, national_summary,
-                  intel_summary_html, build_zambia_map, show_map, layer_available, location_records, link, badge,
+                  intel_summary_html, zmd_banner, build_zambia_map, show_map, layer_available, location_records, link, badge,
                   period_of, LAYERS, LEVELS, NCFG, E, interpret)
 
 nd = national()
@@ -24,6 +24,9 @@ html_block(f"""
  </div>
  <div class="script">Environmental change.<br>People's livelihoods.</div>
 </div>""")
+
+# ---------------------------------------------------------------- official ZMD warnings / seasonal outlook, one line
+html_block(zmd_banner(nd))
 
 # ---------------------------------------------------------------- C. intelligence summary (live figures only)
 built = str(nd.report.get("built_at") or "")[:10]

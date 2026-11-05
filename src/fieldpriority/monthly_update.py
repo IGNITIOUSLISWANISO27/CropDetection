@@ -93,6 +93,12 @@ def main():
             build(today=today)
         except Exception as e:
             print(f"District layers not updated: {e}")
+    print("\n===== ZMD weather warnings (saved copy for when the feed cannot be reached) =====")
+    try:
+        from .zmd import main as zmd_main
+        zmd_main()
+    except Exception as e:
+        print(f"ZMD warnings not refreshed: {e}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,154 @@
+# ZMD seasonal rainfall forecast, transcribed from the official bulletin. FieldPriority does not change the forecast:
+# it only places each statement of the bulletin on the districts it names. Replace this file each season with the
+# new bulletin (same structure). Statements:
+#   province / district : the place named in the bulletin
+#   extent              : all (the whole place) | much ("much of") | south | north (southern / northern parts;
+#                         "extreme northern" counts as north) | parts (parts, direction not given)
+season: "2026/27"
+title: "Seasonal Rainfall Forecast 2026/2027"
+issued: "2026-09-11"
+issued_by: "Zambia Meteorological Department (Director of Meteorology)"
+url: "https://zmd.gov.zm/products/seasonal-forecast/seasonal-rainfall-forecast-20262027/"
+pdf: "https://zmd.gov.zm/documents/162/ZMD_2026-2027_Seasonal_Rainfall_Forecast.pdf"
+drivers: "A very strong El Niño, a positive Indian Ocean Dipole and a negative Subtropical Indian Ocean Dipole point
+  to a drier-than-usual season over most of the country, especially the south and centre. The north is likely to be
+  wetter, with some flood risk."
+
+# Each district's category is the bulletin's own wording for it. Precedence when several statements touch one
+# district: the district named as a whole > the district's northern or southern parts > the province as a whole >
+# the southern or northern parts of the province (placed by where the district lies in its province) > "much of" the
+# province.
+periods:
+  OND:
+    label: "October–December 2026"
+    below_normal:
+      - {province: Southern}
+      - {province: Lusaka}
+      - {province: Central, extent: much}
+      - {province: Western, extent: south}
+    normal_to_below:
+      - {province: Copperbelt}
+      - {province: North-Western, extent: much}
+      - {province: Western, extent: north}
+      - {district: Nyimba}
+      - {district: Mkushi}
+      - {district: Serenje, extent: south}
+    normal_to_above:
+      - {district: [Ikelenge, Mambwe, Chipata, Vubwi, Chadiza, Sinda, Katete, Chipangali, Kasenengwa, Petauke]}
+      - {district: [Mwinilunga, Mushindamo, Serenje], extent: north}
+    above_normal:
+      - {province: Northern}
+      - {province: Luapula}
+      - {province: Muchinga}
+      - {district: [Lumezi, Chasefu, Chama, Lundazi, Chitambo]}
+  NDJ:
+    label: "November 2026–January 2027"
+    below_normal:
+      - {province: Western}
+      - {province: Southern}
+      - {province: Lusaka}
+      - {province: Central, extent: much}
+      - {province: Eastern, extent: south}
+      - {province: North-Western, extent: south}
+    normal_to_below:
+      - {province: Copperbelt}
+      - {province: North-Western, extent: much}
+      - {district: [Petauke, Sinda, Katete, Chadiza, Vubwi, Chipata, Kasenengwa, Mambwe, Lusangazi, Ikelenge,
+                    Chitambo, Serenje]}
+    normal_to_above:
+      - {district: [Lavushimanda, Chitambo, Milenge]}
+      - {district: [Mwinilunga, Mambwe, Chipangali, Kalumbila, Mushindamo], extent: north}
+    above_normal:
+      - {province: Northern}
+      - {province: Luapula, extent: much}
+      - {province: Muchinga, extent: much}
+      - {district: [Chama, Chasefu, Lumezi, Lundazi]}
+  DJF:
+    label: "December 2026–February 2027"
+    below_normal:
+      - {province: Western}
+      - {province: Southern}
+      - {province: Copperbelt}
+      - {province: Lusaka}
+      - {province: North-Western, extent: much}
+      - {province: Central, extent: much}
+      - {province: Eastern, extent: much}
+    normal_to_below:
+      - {district: [Chavuma, Chipangali]}
+      - {district: [Mwinilunga, Solwezi, Mushindamo, Kalumbila, Lavushimanda, Mpika, Lumezi], extent: south}
+    normal_to_above:
+      - {district: [Ikelenge]}
+      - {district: [Mwinilunga, Solwezi, Mushindamo, Kalumbila, Lavushimanda, Mpika, Lumezi], extent: north}
+    above_normal:
+      - {province: Northern}
+      - {province: Luapula}
+      - {province: Muchinga, extent: much}
+      - {district: [Chama, Chasefu, Lundazi]}
+  JFM:
+    label: "January–March 2027"
+    below_normal:
+      - {province: Southern, extent: much}
+      - {district: [Mumbwa, Shibuyunji]}
+    normal_to_below:
+      - {province: Copperbelt}
+      - {province: Central, extent: much}
+      - {province: Lusaka, extent: much}
+      - {province: Western, extent: much}
+      - {province: [North-Western, Muchinga, Luapula, Eastern], extent: south}
+    normal_to_above:
+      - {province: Northern, extent: much}
+      - {province: Muchinga, extent: much}
+      - {province: [North-Western, Luapula, Eastern], extent: north}
+    above_normal:
+      - {district: [Ikelenge]}
+      - {district: [Mbala, Senga Hill, Nakonde, Mungwi], note: "small areas of the extreme north"}
+
+onset:
+  - when: "October (early onset)"
+    places:
+      - {province: [Luapula, North-Western, Copperbelt], extent: much}
+      - {district: [Mambwe, Ngabwe, Kapiri Mposhi, Luano, Chibombo, Kabwe]}
+  - when: "November"
+    places:
+      - {province: [Western, Northern, Muchinga]}
+      - {district: [Chisamba, Mumbwa, Chitambo]}
+  - when: "December (delayed onset)"
+    places:
+      - {province: [Southern, Lusaka, Eastern], extent: much, note: "The bulletin says \"much of southern and
+          south-eastern Zambia\"; placed here on those provinces"}
+cessation:
+  - when: "March"
+    places:
+      - {province: [Southern, Lusaka, Western]}
+      - {province: [Central, North-Western, Copperbelt], extent: much}
+      - {province: [Eastern, Muchinga, Luapula], extent: south}
+  - when: "April, second and third dekads (late end)"
+    places:
+      - {province: [Northern, Luapula, Muchinga], extent: much}
+
+dry_spells: "Prolonged dry spells (more than 10 days with less than 1 mm of rain) are most likely from December to
+  February, mainly over the southern half of the country, and may coincide with crop flowering."
+
+advisories:
+  drier: # areas forecast normal-to-below or below normal
+    - "Expect a late, drier start. Do not plant on the first isolated rains: wait for a proper onset, steady rain
+      that soaks the soil over two to three days."
+    - "Use early-maturing, drought-tolerant varieties, and consider splitting planting into two windows to spread the
+      risk of mid-season dry spells."
+    - "Harvest and store water where possible, and use it sparingly."
+    - "Prepare for dry spells from December to February."
+  wetter: # areas forecast normal-to-above or above normal
+    - "Expect near-normal to above-normal rain. Clear drainage and avoid farming flood-prone land."
+    - "Protect harvested produce from moisture, and watch for waterlogging and nutrient leaching in low-lying fields."
+  all:
+    - "Follow ZMD's daily, weekly and 10-day forecasts and the Agrometeorological Bulletins as the season develops."
+
+notes:
+  - "OND: the bulletin lists Nyimba and Mkushi together with \"the northern parts of Western Province\"; they are
+    placed here on their own districts (Eastern and Central Provinces)."
+  - "NDJ: Chitambo appears under both \"normal to below normal\" and \"normal to above normal\"; both are shown."
+  - "Onset: the bulletin says the October onset extends \"into parts of Northern Province, including Mambwe, Ngabwe,
+    Kapiri Mposhi, Luano, Chibombo and Kabwe\"; these districts are in Eastern and Central Provinces and are placed
+    on their own districts."
+  - "Where the bulletin names a part of a province (\"southern parts of Eastern Province\"), districts are placed by
+    where their centre lies in the province. This is approximate: check the maps in the bulletin."

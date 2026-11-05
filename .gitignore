@@ -13,3 +13,5 @@ data/**/_download_cache/
 data/chongwe_archive/
 *.part
 deploy/
+data/national/
+data/zmd/

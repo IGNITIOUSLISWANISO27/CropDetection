@@ -19,6 +19,7 @@ DATA_TYPES = {
     "model_output": ("Model estimate", "Computed by a weather or land-surface model (reanalysis), not measured on site."),
     "field_observation": ("Field observation", "Recorded on the ground by a verifier (KoboToolbox)."),
     "derived": ("Derived", "Calculated by this platform from the indicators above (rules or statistics)."),
+    "official": ("Official (ZMD)", "Forecast or warning issued by the Zambia Meteorological Department, shown unchanged."),
 }
 CONFIDENCE = ("High", "Medium", "Low")
 
