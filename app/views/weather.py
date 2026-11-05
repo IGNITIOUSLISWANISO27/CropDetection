@@ -17,9 +17,8 @@ ACT = T[T["active"]] if len(T) else T
 # ---------------------------------------------------------------- heading and location
 html_block(f'<div class="fp-eyebrow">Official weather information</div>'
            f'<h1 style="margin:.1rem 0 .3rem">Weather &amp; warnings</h1>'
-           f'<div class="fp-sub" style="max-width:62rem">Forecasts and warnings from the <b>Zambia Meteorological '
-           f'Department (ZMD)</b>, arranged by district. FieldPriority does not issue forecasts or warnings: everything '
-           f'on this page is ZMD\'s, unchanged, with a link to the original. {type_tag("official")}</div>')
+           f'<div class="fp-sub">Zambia Meteorological Department (ZMD) forecasts and warnings, by district, unchanged. '
+           f'{type_tag("official")}</div>')
 
 ids = D["district_id"].tolist()
 names = dict(zip(D["district_id"], D["district"] + " · " + D["province"] + " Province"))
@@ -64,7 +63,8 @@ def alert_card(a, here=False):
             + f'</div><h4>{E(a["headline"])}</h4>'
             f'<div class="meta">{E(valid)} · Urgency: {E(a["urgency"] or "–")} · Certainty: {E(a["certainty"] or "–")}'
             f' · Issued {E(zmd_time(a["sent"]))}</div>'
-            f'<div style="margin-top:.5rem;font-size:.92rem">{E(a["description"])}</div>'
+            + (f'<details style="margin-top:.4rem;font-size:.9rem"><summary>ZMD\'s description</summary>'
+               f'{E(a["description"])}</details>' if a["description"] else "")
             + (f'<div class="do"><b>What ZMD advises:</b> {E(a["instruction"])}</div>' if a["instruction"] else "")
             + f'<div class="meta" style="margin-top:.5rem"><b>Where:</b> {E(where)}'
             + (f' <span style="opacity:.8">({E("; ".join(basis))})</span>' if basis else "")
@@ -72,10 +72,9 @@ def alert_card(a, here=False):
 
 
 # ================================================================ 1. warnings
-sec(1, "Weather warnings and advisories", "Live from ZMD's public alert feed (Common Alerting Protocol). "
-    "Each alert's area is matched to districts using the area ZMD drew, or the places it names.")
+sec(1, "Warnings and advisories")
 if status["live"]:
-    st.caption(f"Checked {zmd_time(status['checked'])} (Zambia time). The feed is checked again every 30 minutes.")
+    st.caption(f"Live from ZMD's alert feed · checked {zmd_time(status['checked'])}")
 elif status["have"]:
     st.warning(f"ZMD's alert feed could not be reached just now, so this shows the copy saved on "
                f"{zmd_time(status['retrieved'])}. Check [zmd.gov.zm/alerts]({ZMD.ALERTS_PAGE}) for anything newer.")
@@ -153,10 +152,10 @@ if spec is None or not len(S):
     empty("The ZMD seasonal forecast has not been loaded (config/zmd_seasonal_forecast.yaml).")
 else:
     sec(2, f"Seasonal rainfall forecast {spec['season']}",
-        f"{E(spec['title'])}, issued {E(zmd_time(spec['issued'] + 'T12:00:00+02:00', False))} by the "
-        f"{E(spec['issued_by'])}. Categories compare the expected rainfall with the normal for each three-month "
-        f"period. <a href='{E(spec['pdf'])}' target='_blank'>Read the full bulletin (PDF)</a>.")
-    html_block(f'<div class="fp-interp" style="border-left-color:#1F4E80;margin-bottom:.8rem">{E(spec["drivers"])}</div>')
+        f"Issued {E(zmd_time(spec['issued'] + 'T12:00:00+02:00', False))} · "
+        f"<a href='{E(spec['pdf'])}' target='_blank'>full bulletin (PDF)</a>")
+    with st.expander("Why ZMD expects this season"):
+        st.markdown(spec["drivers"])
     pers = [p for p in ZMD.PERIOD_ORDER if p in set(S["period"])]
     plabel = dict(zip(S["period"], S["period_label"]))
 
@@ -168,11 +167,10 @@ else:
             chips = (" ".join(zmd_cat_chip(c, small=True) for c in str(r["codes"]).split("|"))
                      if r["split"] or r["conflict"] else zmd_cat_chip(r["code"], r["category"]))
             x = r["text"] if (r["split"] or r["conflict"]) else ""
-            note = ("ZMD lists this district under two categories for this period." if r["conflict"] else
-                    r["basis"])
-            cells += (f'<div><div class="p">{E(p)} · {E(plabel[p])}</div><div style="margin-top:5px">{chips}</div>'
-                      + (f'<div class="x" style="color:#1E2A24">{E(x)}</div>' if x else "")
-                      + f'<div class="x">{E(note)}</div></div>')
+            tip = "ZMD lists this district under two categories for this period." if r["conflict"] else r["basis"]
+            cells += (f'<div title="{E(tip)}"><div class="p">{E(p)} · {E(plabel[p])}</div><div style="margin-top:5px">'
+                      f'{chips}{" ≈" if r["approximate"] else ""}</div>'
+                      + (f'<div class="x" style="color:#1E2A24">{E(x)}</div>' if x else "") + '</div>')
         html_block(f'<div class="fp-panel-h"><span>{icon("drop", 18, "#1F4E80")} {E(dname)}: expected rainfall '
                    f'by period</span></div><div class="fp-ztl">{cells}</div>')
         on = ON.set_index("district_id").loc[pick]
@@ -182,17 +180,15 @@ else:
         k1, k2 = st.columns([1, 1.2], gap="medium")
         with k1:
             html_block(f'<div class="fp-card"><div class="fp-kv">'
-                       f'<div>Start of the rains (onset)</div><div>{E(on["text"])}'
-                       f'<div class="fp-sub">{E(on["basis"])}</div></div>'
-                       f'<div>End of the rains (cessation)</div><div>{E(off["text"])}'
-                       f'<div class="fp-sub">{E(off["basis"])}</div></div>'
-                       f'<div>Dry spells</div><div>{E(spec["dry_spells"])}</div></div></div>')
+                       f'<div>Rains start</div><div title="{E(on["basis"])}">{E(on["text"])}</div>'
+                       f'<div>Rains end</div><div title="{E(off["basis"])}">{E(off["text"])}</div>'
+                       f'<div>Dry spells</div><div>{E(spec["dry_spells"])}</div></div>'
+                       f'<div class="fp-mini" style="margin-top:8px">≈ approximate placement (hover for details)</div>'
+                       f'</div>')
         with k2:
-            html_block('<div class="fp-card"><h4>ZMD advice for farmers in areas like this</h4><ul class="fp-att">'
-                       + "".join(f"<li>{E(x)}</li>" for x in adv) + '</ul><div class="fp-sub">From the seasonal '
-                       'bulletin. Shown because ZMD expects '
-                       + E(" and ".join(sorted({"drier" if r <= 2 else "wetter" for r in ranks if r != 3})) or "normal")
-                       + ' conditions in at least one period here.</div></div>')
+            html_block('<div class="fp-card"><h4>ZMD advice for farmers here</h4><ul class="fp-att">'
+                       + "".join(f"<li>{E(x)}</li>" for x in adv) + f'</ul><div class="fp-mini">From the seasonal '
+                       f'bulletin; this district leans {E(_lean(ranks))}.</div></div>')
 
     # national map of one period
     st.write("")
@@ -236,9 +232,8 @@ else:
                              f'<b>{int(cnt.get(k, 0))}</b></div>' for k, c in ZMD.CATEGORIES.items() if k != "normal")
                    + (f'<div class="fp-dl"><span><i style="background:#D9D9D9"></i>Not stated</span>'
                       f'<b>{int(P["code"].isna().sum())}</b></div>' if P["code"].isna().any() else "")
-                   + '<div class="fp-sub" style="margin-top:8px">Placed on districts by FieldPriority from the '
-                   'bulletin\'s wording; where ZMD names only part of a province the placement is approximate. Check '
-                   'the maps in the bulletin for exact boundaries.</div></div>')
+                   + '<div class="fp-mini" style="margin-top:8px">Approximate where ZMD names only part of a '
+                   'province.</div></div>')
         with st.expander("How the bulletin was placed on districts"):
             st.markdown("\n".join(f"- {x}" for x in spec.get("notes", [])))
             if pick != "zambia":
@@ -248,41 +243,29 @@ else:
                                              or "not mentioned"))
 
 # ================================================================ 3. connection with the platform
-sec(3, "Forecast and observations together", "ZMD's outlook says what is expected; the platform's satellite "
-    "indicators say what has happened so far. Both are needed for early awareness.")
+sec(3, "Forecast and observations together")
 if pick != "zambia" and spec is not None and len(S):
     rec = location_records(nd, pick)
     rain, maize = rec.get("rainfall_anomaly_pct") or {}, rec.get("maize_share_pct") or {}
     djf = S[(S["district_id"] == pick) & (S["period"] == "DJF")]
     djf_rank = djf["rank"].iloc[0] if len(djf) else None
-    pts = []
-    if rain.get("status") == "ok":
-        pts.append(f"Observed rainfall ({rain.get('period_label')}): {rain['display']}, CHIRPS satellite estimate.")
-    else:
-        pts.append("Observed rainfall: not yet available for this district.")
+    pts = [f"Observed so far: rainfall {str(rain['display']).split(' · ')[0]} vs normal ({rain.get('period_label')})"
+           if rain.get("status") == "ok" else "Observed rainfall: not yet available"]
     if maize.get("status") == "ok":
-        pts.append(f"Maize-growing status: {maize['display']} (ESA WorldCereal 2021).")
+        pts.append(f"{maize['class']}: {float(maize['value']):.0f}% of land under maize")
     if djf_rank is not None and djf_rank <= 2:
-        pts.append("ZMD expects normal-to-below or below-normal rain from December to February, when maize planted in "
-                   "November–December usually flowers. If maize is grown here, monitoring crop condition and field "
-                   "visits through that period should be a priority.")
+        pts.append("Drier Dec–Feb expected, when maize flowers: prioritise crop monitoring and field visits then")
     elif djf_rank is not None and djf_rank >= 4:
-        pts.append("ZMD expects normal-to-above or above-normal rain from December to February: waterlogging and "
-                   "flood-prone fields deserve attention more than drought.")
+        pts.append("Wetter Dec–Feb expected: watch waterlogging and flood-prone fields")
     html_block('<div class="fp-card"><ul class="fp-act-list" style="margin:0;padding:0">'
                + "".join(f"<li>{E(x)}</li>" for x in pts) + '</ul><div style="margin-top:.4rem">'
-               + type_tag("derived") + '<span class="fp-sub">Platform note combining ZMD\'s forecast with the '
-               'district indicators. It is not a ZMD statement.</span></div></div>')
+               + type_tag("derived") + '<span class="fp-mini">Platform note, not a ZMD statement.</span></div></div>')
 else:
-    st.caption("Choose a district above to compare ZMD's forecast with what the satellites have observed there "
-               f"({period_of(nd)}).")
+    st.caption("Choose a district to compare ZMD's forecast with what has been observed there.")
 
 # ================================================================ 4. more ZMD products
-sec(4, "Latest forecasts on zmd.gov.zm", "Short-range forecasts and the 10-day agrometeorological bulletins are "
-    "published by ZMD as web pages and documents; open them at the source.")
+sec(4, "Latest forecasts on zmd.gov.zm")
 html_block('<div class="fp-zprod">' + "".join(f'<a href="{E(u)}" target="_blank"><b>{E(t)} ↗</b><span>{E(s)}</span></a>'
                                               for t, u, s in ZMD.PRODUCTS) + '</div>')
-st.caption("Source: Zambia Meteorological Department, zmd.gov.zm. Warnings: ZMD's public CAP alert feed "
-           f"({ZMD.RSS_URL}). Seasonal forecast: transcribed from the ZMD bulletin. In an emergency follow the "
-           "instructions of ZMD and the Disaster Management and Mitigation Unit (DMMU).")
+st.caption("Source: Zambia Meteorological Department (zmd.gov.zm). In an emergency follow ZMD and DMMU instructions.")
 html_block(footer())

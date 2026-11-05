@@ -9,8 +9,7 @@ V = visits(data)
 Vall = visits(data, include_test=True)
 m = data.metrics or {}
 status = status_by_field(data)
-page_title("Data Quality and Verification", "How complete and reliable the information is: which records can be "
-           "used for evaluation, which need more information, and which are not yet verified in the field.",
+page_title("Data Quality and Verification", "How complete and reliable the field information is.",
            eyebrow="Transparency", icon_name="check")
 
 complete = A[A["missing_data"].map(len) == 0] if len(A) else A

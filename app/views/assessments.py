@@ -197,8 +197,7 @@ if qp_field and qp_field in set(A["field_id"]):
     st.stop()
 
 # ================================================================ list of assessments
-page_title("Assessments", "Every field the system has assessed, with its drought-risk class and verification "
-           "status, and every field visit received through KoboToolbox. Open a record to see the full field profile.",
+page_title("Assessments", "Each field's risk class, verification and visits. Open a field for its profile.",
            eyebrow="Field assessment records", icon_name="clipboard")
 
 stat = A["field_id"].map(status)

@@ -5,8 +5,7 @@ from _lib import (page_title, html_block, national, monitored_fields, build_zamb
 
 nd = national()
 F = monitored_fields(nd)
-page_title("Zambia Map", "Where environmental and agricultural conditions are changing. Choose an indicator layer; "
-           "monitored fields and field observations are drawn on top. Click a district for its location report.",
+page_title("Zambia Map", "Where conditions are changing. Click a district for its intelligence report.",
            eyebrow="Geographical overview", icon_name="layers")
 
 with st.container(border=True):
@@ -23,8 +22,7 @@ with left:
         b = nd.districts[nd.districts["province"] == prov].total_bounds
         m.fit_bounds([[b[1], b[0]], [b[3], b[2]]], padding=(10, 10))
     show_map(m, height=650)
-    st.caption("Base map: Esri light grey canvas or Esri satellite imagery (layer button, top right). District boundaries: "
-               "geoBoundaries (simplified). District values are averages and hide differences between farms.")
+    st.caption("District averages; farms can differ. Boundaries: geoBoundaries.")
 
 with right:
     L = LAYERS[key]
@@ -41,10 +39,11 @@ with right:
     else:
         ok = t[t["status"] == "ok"]
         r0 = ok.iloc[0].to_dict()
-        html_block(f'<div class="fp-card" style="margin-top:10px"><div>{type_tag(r0["data_type"])}{conf_tag(r0["confidence"])}</div>'
-                   f'<div class="fp-sub" style="margin-top:6px">{evidence_line(r0)}</div>'
-                   + (f'<div class="fp-note" style="margin-top:8px">{E(r0["quality_note"])}</div>' if r0.get("quality_note") else "")
-                   + '</div>')
+        with st.popover("Source and quality", icon=":material/info:", width="stretch"):
+            html_block(f'<div>{type_tag(r0["data_type"])}{conf_tag(r0["confidence"])}</div>'
+                       f'<div class="fp-sub" style="margin-top:6px">{evidence_line(r0)}</div>'
+                       + (f'<div class="fp-note" style="margin-top:8px">{E(r0["quality_note"])}</div>'
+                          if r0.get("quality_note") else ""))
         show = ok[["location_name", "province", "display", "value"]].copy()
         show["value"] = pd.to_numeric(show["value"], errors="coerce")
         show = show.sort_values("value" if show["value"].notna().any() else "display")

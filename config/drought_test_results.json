@@ -1,0 +1,684 @@
+{
+  "test": "2023/24 drought",
+  "declared": "2024-02-29",
+  "fingerprint": "804e78965932",
+  "reference": {
+    "affected_districts": 84,
+    "affected_provinces": [
+      "Central",
+      "Copperbelt",
+      "Eastern",
+      "Lusaka",
+      "North-Western",
+      "Southern",
+      "Western"
+    ],
+    "not_affected_provinces": [
+      "Northern",
+      "Luapula",
+      "Muchinga"
+    ],
+    "note": "The government counts 84 affected districts in these seven provinces, which together have 83 districts on the boundary map used here (84 on the official list). Every district in the seven provinces is therefore treated as affected, and the three northern provinces as not affected. District-level severity was not published.",
+    "sources": [
+      "DMMU Food Security Drought Response Plan, April 2024: 84 of 116 districts in seven provinces significantly affected (https://agrifocusafrica.com/2024/05/06/republic-of-zambia-disaster-management-and-mitigation-unit-food-security-drought-response-plan-april-2024/)",
+      "DMMU Drought Response Situation Report No. 2, 1 August 2024: 84 districts affected (https://reliefweb.int/report/zambia/republic-zambia-disaster-management-and-mitigation-unit-drought-response-situation-report-no-2-1st-august-2024)",
+      "Al Jazeera, 29 February 2024: national disaster declared (https://www.aljazeera.com/news/2024/2/29/zambia-declares-national-disaster-after-drought-devastates-agriculture)"
+    ]
+  },
+  "generated": "2026-11-05T14:01:36",
+  "offline": true,
+  "runs": [
+    {
+      "districts": 116,
+      "assessed": 116,
+      "flagged": {
+        "flagged": 67,
+        "hit": 62,
+        "of_affected": 83,
+        "hit_rate": 0.747,
+        "hit_ci95": [
+          0.644,
+          0.828
+        ],
+        "false_alarms": 5,
+        "of_not_affected": 33,
+        "false_alarm_rate": 0.152,
+        "false_alarm_ci95": [
+          0.067,
+          0.309
+        ],
+        "accuracy": 0.776
+      },
+      "concern": {
+        "flagged": 66,
+        "hit": 62,
+        "of_affected": 83,
+        "hit_rate": 0.747,
+        "hit_ci95": [
+          0.644,
+          0.828
+        ],
+        "false_alarms": 4,
+        "of_not_affected": 33,
+        "false_alarm_rate": 0.121,
+        "false_alarm_ci95": [
+          0.048,
+          0.273
+        ],
+        "accuracy": 0.784
+      },
+      "median_rain_pct": {
+        "affected": -7.0,
+        "not_affected": 23.0
+      },
+      "by_province": {
+        "Central": {
+          "flagged": 8,
+          "districts": 12,
+          "median_rain_pct": 21.0
+        },
+        "Copperbelt": {
+          "flagged": 0,
+          "districts": 10,
+          "median_rain_pct": 8.5
+        },
+        "Eastern": {
+          "flagged": 13,
+          "districts": 14,
+          "median_rain_pct": -32.5
+        },
+        "Luapula": {
+          "flagged": 1,
+          "districts": 12,
+          "median_rain_pct": 25.0
+        },
+        "Lusaka": {
+          "flagged": 7,
+          "districts": 7,
+          "median_rain_pct": 12.0
+        },
+        "Muchinga": {
+          "flagged": 4,
+          "districts": 9,
+          "median_rain_pct": -5.0
+        },
+        "North-Western": {
+          "flagged": 7,
+          "districts": 11,
+          "median_rain_pct": -14.0
+        },
+        "Northern": {
+          "flagged": 0,
+          "districts": 12,
+          "median_rain_pct": 32.0
+        },
+        "Southern": {
+          "flagged": 12,
+          "districts": 13,
+          "median_rain_pct": -2.0
+        },
+        "Western": {
+          "flagged": 15,
+          "districts": 16,
+          "median_rain_pct": -21.5
+        }
+      },
+      "name": "2023-24_to_Dec",
+      "period": "2023-11..2023-12",
+      "kind": "drought",
+      "period_label": "Nov 2023 to Dec 2023",
+      "baseline_seasons": [
+        "2013/14",
+        "2014/15",
+        "2015/16",
+        "2016/17",
+        "2017/18",
+        "2018/19",
+        "2019/20",
+        "2020/21",
+        "2021/22",
+        "2022/23"
+      ],
+      "run_date": "2024-01-20",
+      "before_declaration": true
+    },
+    {
+      "districts": 116,
+      "assessed": 116,
+      "flagged": {
+        "flagged": 57,
+        "hit": 51,
+        "of_affected": 83,
+        "hit_rate": 0.614,
+        "hit_ci95": [
+          0.507,
+          0.712
+        ],
+        "false_alarms": 6,
+        "of_not_affected": 33,
+        "false_alarm_rate": 0.182,
+        "false_alarm_ci95": [
+          0.086,
+          0.344
+        ],
+        "accuracy": 0.672
+      },
+      "concern": {
+        "flagged": 53,
+        "hit": 47,
+        "of_affected": 83,
+        "hit_rate": 0.566,
+        "hit_ci95": [
+          0.459,
+          0.668
+        ],
+        "false_alarms": 6,
+        "of_not_affected": 33,
+        "false_alarm_rate": 0.182,
+        "false_alarm_ci95": [
+          0.086,
+          0.344
+        ],
+        "accuracy": 0.638
+      },
+      "median_rain_pct": {
+        "affected": -15.0,
+        "not_affected": 6.0
+      },
+      "by_province": {
+        "Central": {
+          "flagged": 4,
+          "districts": 12,
+          "median_rain_pct": 0.0
+        },
+        "Copperbelt": {
+          "flagged": 0,
+          "districts": 10,
+          "median_rain_pct": -1.5
+        },
+        "Eastern": {
+          "flagged": 12,
+          "districts": 14,
+          "median_rain_pct": -19.0
+        },
+        "Luapula": {
+          "flagged": 0,
+          "districts": 12,
+          "median_rain_pct": 9.0
+        },
+        "Lusaka": {
+          "flagged": 0,
+          "districts": 7,
+          "median_rain_pct": 3.0
+        },
+        "Muchinga": {
+          "flagged": 6,
+          "districts": 9,
+          "median_rain_pct": -16.0
+        },
+        "North-Western": {
+          "flagged": 10,
+          "districts": 11,
+          "median_rain_pct": -22.0
+        },
+        "Northern": {
+          "flagged": 0,
+          "districts": 12,
+          "median_rain_pct": 10.5
+        },
+        "Southern": {
+          "flagged": 9,
+          "districts": 13,
+          "median_rain_pct": -11.0
+        },
+        "Western": {
+          "flagged": 16,
+          "districts": 16,
+          "median_rain_pct": -29.0
+        }
+      },
+      "name": "2023-24_to_Jan",
+      "period": "2023-11..2024-01",
+      "kind": "drought",
+      "period_label": "Nov 2023 to Jan 2024",
+      "baseline_seasons": [
+        "2013/14",
+        "2014/15",
+        "2015/16",
+        "2016/17",
+        "2017/18",
+        "2018/19",
+        "2019/20",
+        "2020/21",
+        "2021/22",
+        "2022/23"
+      ],
+      "run_date": "2024-02-20",
+      "before_declaration": true
+    },
+    {
+      "districts": 116,
+      "assessed": 116,
+      "flagged": {
+        "flagged": 86,
+        "hit": 80,
+        "of_affected": 83,
+        "hit_rate": 0.964,
+        "hit_ci95": [
+          0.899,
+          0.988
+        ],
+        "false_alarms": 6,
+        "of_not_affected": 33,
+        "false_alarm_rate": 0.182,
+        "false_alarm_ci95": [
+          0.086,
+          0.344
+        ],
+        "accuracy": 0.922
+      },
+      "concern": {
+        "flagged": 85,
+        "hit": 80,
+        "of_affected": 83,
+        "hit_rate": 0.964,
+        "hit_ci95": [
+          0.899,
+          0.988
+        ],
+        "false_alarms": 5,
+        "of_not_affected": 33,
+        "false_alarm_rate": 0.152,
+        "false_alarm_ci95": [
+          0.067,
+          0.309
+        ],
+        "accuracy": 0.931
+      },
+      "median_rain_pct": {
+        "affected": -30.0,
+        "not_affected": -1.0
+      },
+      "by_province": {
+        "Central": {
+          "flagged": 12,
+          "districts": 12,
+          "median_rain_pct": -20.0
+        },
+        "Copperbelt": {
+          "flagged": 8,
+          "districts": 10,
+          "median_rain_pct": -20.0
+        },
+        "Eastern": {
+          "flagged": 14,
+          "districts": 14,
+          "median_rain_pct": -30.5
+        },
+        "Luapula": {
+          "flagged": 0,
+          "districts": 12,
+          "median_rain_pct": -3.5
+        },
+        "Lusaka": {
+          "flagged": 7,
+          "districts": 7,
+          "median_rain_pct": -22.0
+        },
+        "Muchinga": {
+          "flagged": 6,
+          "districts": 9,
+          "median_rain_pct": -15.0
+        },
+        "North-Western": {
+          "flagged": 10,
+          "districts": 11,
+          "median_rain_pct": -34.0
+        },
+        "Northern": {
+          "flagged": 0,
+          "districts": 12,
+          "median_rain_pct": 5.0
+        },
+        "Southern": {
+          "flagged": 13,
+          "districts": 13,
+          "median_rain_pct": -35.0
+        },
+        "Western": {
+          "flagged": 16,
+          "districts": 16,
+          "median_rain_pct": -41.0
+        }
+      },
+      "name": "2023-24_to_Feb",
+      "period": "2023-11..2024-02",
+      "kind": "drought",
+      "period_label": "Nov 2023 to Feb 2024",
+      "baseline_seasons": [
+        "2013/14",
+        "2014/15",
+        "2015/16",
+        "2016/17",
+        "2017/18",
+        "2018/19",
+        "2019/20",
+        "2020/21",
+        "2021/22",
+        "2022/23"
+      ],
+      "run_date": "2024-03-20",
+      "before_declaration": false
+    },
+    {
+      "districts": 116,
+      "assessed": 116,
+      "flagged": {
+        "flagged": 92,
+        "hit": 82,
+        "of_affected": 83,
+        "hit_rate": 0.988,
+        "hit_ci95": [
+          0.935,
+          0.998
+        ],
+        "false_alarms": 10,
+        "of_not_affected": 33,
+        "false_alarm_rate": 0.303,
+        "false_alarm_ci95": [
+          0.174,
+          0.473
+        ],
+        "accuracy": 0.905
+      },
+      "concern": {
+        "flagged": 92,
+        "hit": 82,
+        "of_affected": 83,
+        "hit_rate": 0.988,
+        "hit_ci95": [
+          0.935,
+          0.998
+        ],
+        "false_alarms": 10,
+        "of_not_affected": 33,
+        "false_alarm_rate": 0.303,
+        "false_alarm_ci95": [
+          0.174,
+          0.473
+        ],
+        "accuracy": 0.905
+      },
+      "median_rain_pct": {
+        "affected": -31.0,
+        "not_affected": -5.0
+      },
+      "by_province": {
+        "Central": {
+          "flagged": 12,
+          "districts": 12,
+          "median_rain_pct": -23.5
+        },
+        "Copperbelt": {
+          "flagged": 10,
+          "districts": 10,
+          "median_rain_pct": -24.0
+        },
+        "Eastern": {
+          "flagged": 14,
+          "districts": 14,
+          "median_rain_pct": -31.5
+        },
+        "Luapula": {
+          "flagged": 2,
+          "districts": 12,
+          "median_rain_pct": -6.5
+        },
+        "Lusaka": {
+          "flagged": 7,
+          "districts": 7,
+          "median_rain_pct": -22.0
+        },
+        "Muchinga": {
+          "flagged": 8,
+          "districts": 9,
+          "median_rain_pct": -22.0
+        },
+        "North-Western": {
+          "flagged": 10,
+          "districts": 11,
+          "median_rain_pct": -36.0
+        },
+        "Northern": {
+          "flagged": 0,
+          "districts": 12,
+          "median_rain_pct": -1.0
+        },
+        "Southern": {
+          "flagged": 13,
+          "districts": 13,
+          "median_rain_pct": -34.0
+        },
+        "Western": {
+          "flagged": 16,
+          "districts": 16,
+          "median_rain_pct": -46.5
+        }
+      },
+      "name": "2023-24_to_Mar",
+      "period": "2023-11..2024-03",
+      "kind": "drought",
+      "period_label": "Nov 2023 to Mar 2024",
+      "baseline_seasons": [
+        "2013/14",
+        "2014/15",
+        "2015/16",
+        "2016/17",
+        "2017/18",
+        "2018/19",
+        "2019/20",
+        "2020/21",
+        "2021/22",
+        "2022/23"
+      ],
+      "run_date": "2024-04-20",
+      "before_declaration": false
+    },
+    {
+      "districts": 116,
+      "assessed": 116,
+      "flagged": {
+        "flagged": 90,
+        "false_alarms": 90,
+        "of_not_affected": 116,
+        "false_alarm_rate": 0.776,
+        "false_alarm_ci95": [
+          0.692,
+          0.842
+        ]
+      },
+      "concern": {
+        "flagged": 85,
+        "false_alarms": 85,
+        "of_not_affected": 116,
+        "false_alarm_rate": 0.733,
+        "false_alarm_ci95": [
+          0.646,
+          0.805
+        ]
+      },
+      "median_rain_pct": {
+        "affected": null,
+        "not_affected": -12.0
+      },
+      "by_province": {
+        "Central": {
+          "flagged": 11,
+          "districts": 12,
+          "median_rain_pct": -4.5
+        },
+        "Copperbelt": {
+          "flagged": 7,
+          "districts": 10,
+          "median_rain_pct": -13.5
+        },
+        "Eastern": {
+          "flagged": 12,
+          "districts": 14,
+          "median_rain_pct": -6.0
+        },
+        "Luapula": {
+          "flagged": 12,
+          "districts": 12,
+          "median_rain_pct": -29.0
+        },
+        "Lusaka": {
+          "flagged": 3,
+          "districts": 7,
+          "median_rain_pct": -4.0
+        },
+        "Muchinga": {
+          "flagged": 9,
+          "districts": 9,
+          "median_rain_pct": -26.0
+        },
+        "North-Western": {
+          "flagged": 10,
+          "districts": 11,
+          "median_rain_pct": -10.0
+        },
+        "Northern": {
+          "flagged": 8,
+          "districts": 12,
+          "median_rain_pct": -23.5
+        },
+        "Southern": {
+          "flagged": 5,
+          "districts": 13,
+          "median_rain_pct": 4.0
+        },
+        "Western": {
+          "flagged": 13,
+          "districts": 16,
+          "median_rain_pct": -10.0
+        }
+      },
+      "name": "2024-25_to_Feb",
+      "period": "2024-11..2025-02",
+      "kind": "control",
+      "period_label": "Nov 2024 to Feb 2025",
+      "baseline_seasons": [
+        "2014/15",
+        "2015/16",
+        "2016/17",
+        "2017/18",
+        "2018/19",
+        "2019/20",
+        "2020/21",
+        "2021/22",
+        "2022/23",
+        "2023/24"
+      ],
+      "run_date": "2025-03-20",
+      "before_declaration": null
+    },
+    {
+      "districts": 116,
+      "assessed": 116,
+      "flagged": {
+        "flagged": 88,
+        "false_alarms": 88,
+        "of_not_affected": 116,
+        "false_alarm_rate": 0.759,
+        "false_alarm_ci95": [
+          0.673,
+          0.827
+        ]
+      },
+      "concern": {
+        "flagged": 81,
+        "false_alarms": 81,
+        "of_not_affected": 116,
+        "false_alarm_rate": 0.698,
+        "false_alarm_ci95": [
+          0.609,
+          0.774
+        ]
+      },
+      "median_rain_pct": {
+        "affected": null,
+        "not_affected": -15.5
+      },
+      "by_province": {
+        "Central": {
+          "flagged": 9,
+          "districts": 12,
+          "median_rain_pct": -13.0
+        },
+        "Copperbelt": {
+          "flagged": 7,
+          "districts": 10,
+          "median_rain_pct": -17.5
+        },
+        "Eastern": {
+          "flagged": 10,
+          "districts": 14,
+          "median_rain_pct": -2.5
+        },
+        "Luapula": {
+          "flagged": 12,
+          "districts": 12,
+          "median_rain_pct": -29.0
+        },
+        "Lusaka": {
+          "flagged": 3,
+          "districts": 7,
+          "median_rain_pct": -10.0
+        },
+        "Muchinga": {
+          "flagged": 9,
+          "districts": 9,
+          "median_rain_pct": -23.0
+        },
+        "North-Western": {
+          "flagged": 11,
+          "districts": 11,
+          "median_rain_pct": -10.0
+        },
+        "Northern": {
+          "flagged": 8,
+          "districts": 12,
+          "median_rain_pct": -19.0
+        },
+        "Southern": {
+          "flagged": 6,
+          "districts": 13,
+          "median_rain_pct": -10.0
+        },
+        "Western": {
+          "flagged": 13,
+          "districts": 16,
+          "median_rain_pct": -17.5
+        }
+      },
+      "name": "2024-25_to_Mar",
+      "period": "2024-11..2025-03",
+      "kind": "control",
+      "period_label": "Nov 2024 to Mar 2025",
+      "baseline_seasons": [
+        "2014/15",
+        "2015/16",
+        "2016/17",
+        "2017/18",
+        "2018/19",
+        "2019/20",
+        "2020/21",
+        "2021/22",
+        "2022/23",
+        "2023/24"
+      ],
+      "run_date": "2025-04-20",
+      "before_declaration": null
+    }
+  ]
+}

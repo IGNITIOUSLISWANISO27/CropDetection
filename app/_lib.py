@@ -1103,7 +1103,7 @@ def national_summary(nd, fields):
     watch = int((fields["risk_level"] == "Watch").sum()) if nf else 0
     if len(veg):
         below = int(veg["class"].isin(["Below normal", "Well below normal"]).sum())
-        out.append(("leaf", f"{below}", f"of {len(veg)} districts", "Crop & vegetation",
+        out.append(("leaf", f"{below}", f"of {len(veg)} districts with vegetation below normal", "Crop & vegetation",
                     f"Cropland greenness below normal, {per}. Monitored fields with a crop-stress flag: {stress} of {nf}.",
                     "satellite_estimate", "Medium"))
     else:
@@ -1157,10 +1157,10 @@ def national_summary(nd, fields):
 
 def intel_summary_html(items, updated=None):
     cells = "".join(
-        f'<div class="fp-in-cell"><div class="fp-in-top"><span class="fp-in-ic">{icon(ic, 20)}</span>'
+        f'<div class="fp-in-cell" title="{E(note)}{E(" · Confidence: " + conf) if conf else ""}">'
+        f'<div class="fp-in-top"><span class="fp-in-ic">{icon(ic, 20)}</span>'
         f'<span class="fp-in-t">{E(title)}</span></div><div class="fp-in-v">{E(v)}</div>'
-        f'<div class="fp-in-l">{E(lab)}</div><div class="fp-in-n">{E(note)}</div>'
-        f'<div style="margin-top:6px">{type_tag(dt_)}{conf_tag(conf)}</div></div>'
+        f'<div class="fp-in-l">{E(lab)}</div><div style="margin-top:6px">{type_tag(dt_)}</div></div>'
         for ic, v, lab, title, note, dt_, conf in items)
     up = f'<span class="fp-gl-upd">{icon("clock", 14, "#E8EFE9")} {E(updated)}</span>' if updated else ""
     return (f'<div class="fp-gl"><div class="fp-gl-head"><span>{icon("gauge", 20, "#F2C74E")} Agricultural '
@@ -1337,3 +1337,109 @@ def zmd_banner(nd):
             f'<div class="ic" style="background:#1F4E80;color:#fff">{icon("storm", 22)}</div><div style="flex:1;'
             f'min-width:240px"><b>{chk}</b>{seas}</div>'
             f'<a href="{link("/weather")}" target="_self">Weather &amp; warnings →</a></div>')
+
+
+# ---------------------------------------------------------------- connected evidence (location intelligence)
+STATE = {"bad": ("#B9342B", "#FBE9E6"), "warn": ("#C8870F", "#FFF4DB"), "ok": ("#2E8B57", "#E8F3EC"),
+         "info": ("#1F4E80", "#E8F0F8"), "none": ("#8A948E", "#F1F1EE")}
+_BAD = {"Very dry", "Much warmer than normal", "Well below normal", "Likely water stress"}
+_WARN = {"Drier than normal", "Warmer than normal", "Below normal", "Possible water stress",
+         "Early sign: rainfall deficit"}
+
+
+def _node(rec, title, ic, state=None, value=None, note=None):
+    ok = bool(rec) and rec.get("status") == "ok"
+    if value is None:
+        value = str(rec.get("display")).split(" · ")[0] if ok else "–"
+    cls = (rec or {}).get("class") if ok else None
+    if state is None:
+        state = "none" if not ok else "bad" if cls in _BAD else "warn" if cls in _WARN else "ok"
+    fg, bg = STATE[state]
+    note = note if note is not None else (cls if cls and cls != value else ("Not yet available" if not ok else ""))
+    tip = E(evidence_line(rec)) if ok else E((rec or {}).get("quality_note") or "Not yet available")
+    return (f'<div class="fp-node" style="border-color:{fg}33;background:{bg}" title="{tip}">'
+            f'<div class="h" style="color:{fg}">{icon(ic, 15, fg)} {E(title)}</div>'
+            f'<div class="v">{E(value)}</div><div class="n" style="color:{fg}">{E(note or "")}</div></div>')
+
+
+def signal_chain_html(recs, fields=None, together=""):
+    """Weather -> water -> crop -> options: the six layers as one chain for a location."""
+    f = fields if fields is not None else pd.DataFrame()
+    if len(f):
+        hi = int(f["risk_level"].isin(["High", "Moderate", "Not attributed"]).sum())
+        wa = int((f["risk_level"] == "Watch").sum())
+        crop = _node({"status": "ok"}, "Monitored fields", "camera", "bad" if hi else "warn" if wa else "ok",
+                     f"{len(f)} field{'s' if len(f) > 1 else ''}",
+                     f"{hi} with crop stress" if hi else f"{wa} on watch" if wa else "No crop-stress flag")
+    else:
+        crop = _node(None, "Monitored fields", "camera", "none", "–", "No fields here yet")
+    sol = recs.get("solar_resource") or {}
+    groups = [
+        ("Weather", [_node(recs.get("rainfall_anomaly_pct"), "Rainfall", "drop"),
+                     _node(recs.get("temperature_deviation"), "Temperature", "thermo")]),
+        ("Water", [_node(recs.get("soil_moisture_anomaly_pct"), "Soil moisture", "drop"),
+                   _node(recs.get("water_stress"), "Water stress", "gauge",
+                         value=(recs.get("water_stress") or {}).get("class") or "–", note="")]),
+        ("Crop", [_node(recs.get("vegetation_anomaly_pct"), "Vegetation", "leaf"), crop]),
+        ("Options", [_node(sol, "Solar for pumping", "sun", "info" if sol.get("status") == "ok" else "none",
+                           note="Resource only")]),
+    ]
+    cols = []
+    for i, (g, nodes) in enumerate(groups):
+        cols.append(f'<div class="fp-grp"><div class="gh">{E(g)}</div>{"".join(nodes)}</div>')
+        if i < len(groups) - 1:
+            cols.append('<div class="fp-arr">→</div>')
+    return (f'<div class="fp-chain">{"".join(cols)}</div>'
+            + (f'<div class="fp-together"><b>Together:</b> {E(together)}</div>' if together else ""))
+
+
+def answer_cards_html(what, what_sub, why, why_sub, nxt, color):
+    return (f'<div class="fp-q3"><div class="q" style="border-top-color:{color}"><div class="k">What is happening?</div>'
+            f'<div class="a" style="color:{color}">{E(what)}</div><div class="s">{what_sub}</div></div>'
+            f'<div class="q"><div class="k">Why does it matter?</div><div class="a">{E(why)}</div>'
+            f'<div class="s">{why_sub}</div></div>'
+            f'<div class="q"><div class="k">What should be considered next?</div><ol>'
+            + "".join(f"<li>{E(x)}</li>" for x in nxt[:3]) + '</ol></div></div>')
+
+
+CSS_V4 = """
+<style>
+.fp-hero.compact{min-height:250px}
+.fp-hero.compact .inner{padding:30px 40px 28px}
+.fp-hero.compact h1{font-size:2.1rem;margin:.3rem 0 .5rem}
+.fp-hero.compact p{margin:0 0 .9rem;font-size:1rem}
+.fp-hero.compact .script{font-size:1.25rem;bottom:26px}
+.fp-in-cell{cursor:help}
+.fp-loc{background:var(--forest);border-radius:18px;padding:18px 24px;color:#fff;display:flex;gap:16px;align-items:center;
+  flex-wrap:wrap;margin:.2rem 0 .9rem}
+.fp-loc h1{color:#fff !important;margin:0;font-size:2rem;line-height:1.1}
+.fp-loc .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.fp-loc .chips span{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);border-radius:999px;
+  padding:2px 10px;font-size:.8rem;color:#E8EFE9}
+.fp-loc .lvl{margin-left:auto;padding:8px 16px;border-radius:999px;font:700 .95rem var(--fb);color:#fff}
+.fp-q3{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:12px;margin-bottom:.9rem}
+.fp-q3 .q{background:#fff;border:1px solid var(--line);border-top:4px solid var(--forest);border-radius:14px;padding:14px 16px}
+.fp-q3 .k{font:700 .72rem var(--fb);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.fp-q3 .a{font:800 1.12rem/1.3 var(--fh);color:var(--ink);margin:.35rem 0 .3rem}
+.fp-q3 .s{color:var(--muted);font-size:.86rem;line-height:1.4}
+.fp-q3 ol{margin:.45rem 0 0 1.1rem;padding:0;font-weight:600;color:var(--ink);font-size:.93rem;line-height:1.45}
+.fp-chain{display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto .8fr;gap:8px;align-items:center}
+.fp-grp{display:flex;flex-direction:column;gap:7px}
+.fp-grp .gh{font:700 .7rem var(--fb);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:center}
+.fp-arr{font:700 1.5rem var(--fb);color:#B8B09A}
+.fp-node{border:1px solid;border-radius:12px;padding:8px 11px;cursor:help}
+.fp-node .h{font:700 .78rem var(--fb);display:flex;gap:5px;align-items:center}
+.fp-node .v{font:800 1.25rem/1.15 var(--fh);color:var(--ink);margin-top:2px}
+.fp-node .n{font-size:.74rem;font-weight:600;min-height:1em}
+.fp-together{margin-top:10px;background:#fff;border-left:4px solid var(--forest);border-radius:10px;padding:9px 14px;
+  font-size:.93rem}
+.fp-mini{color:var(--muted);font-size:.82rem}
+.fp-watch{display:flex;gap:10px;align-items:center;padding:8px 2px;border-bottom:1px solid var(--line);font-size:.9rem}
+.fp-watch:last-child{border-bottom:0}
+.fp-watch i{width:10px;height:10px;border-radius:50%;flex:none}
+.fp-watch a{color:var(--ink) !important;font-weight:700;text-decoration:none}
+.fp-watch .s{color:var(--muted);font-size:.8rem;margin-left:auto;text-align:right}
+@media (max-width: 1000px){ .fp-q3{grid-template-columns:1fr} .fp-chain{grid-template-columns:1fr} .fp-arr{transform:rotate(90deg);
+  justify-self:center} }
+</style>
+"""

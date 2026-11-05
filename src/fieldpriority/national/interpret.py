@@ -201,8 +201,44 @@ def interpret(name, recs, c, fields=None, monthly_rain=None, period_label=""):
         cons.append("Run the monthly update or import the Earth Engine district export to fill the missing layers.")
     cons.append("Review any decision with agricultural extension officers: the platform supports local judgement, "
                 "it does not replace it.")
-    return {"level": level, "headline": head, "paragraphs": paras, "maize": maize, "gaps": gaps,
-            "considerations": cons, "concern": concern, "classes": {"rainfall": rc, "temperature": tc,
+    # short forms for the at-a-glance cards (the full sentences above stay in the details)
+    why = []
+    if level == "normal":
+        why.append("Moisture has been adequate for the crop so far this season.")
+    elif any(m in (1, 2) for m in dry_months):
+        why.append("Dry spell around flowering, the stage when maize yield is most at risk.")
+    elif any(m in (11, 12) for m in dry_months):
+        why.append("Early-season deficit: can delay planting and weaken early growth.")
+    elif any(m in (3, 4) for m in dry_months):
+        why.append("Late deficit during grain filling: lighter grain, smaller losses.")
+    elif moist:
+        why.append("Less water for the crop than usual at this point in the season.")
+    if tc in ("Much warmer than normal", "Warmer than normal"):
+        why.append("Warmer weather raises crop water demand.")
+    if not why:
+        why.append("No specific effect on maize expected now." if have else "Cannot be judged without data.")
+    nxt = []
+    if level in ("concern", "watch"):
+        nxt.append("Visit the flagged fields first" if urgent else "Re-visit Watch fields if greenness falls"
+                   if flagged else "Inspect the monitored fields" if fields else
+                   "Ask extension officers for field reports")
+    if stress or ws == "Early sign: rainfall deficit":
+        nxt.append("Check water access: boreholes, dams, streams")
+        nxt.append("Review water management with extension officers")
+    if tc in ("Much warmer than normal", "Warmer than normal") and level != "normal":
+        nxt.append("Look for heat stress at tasselling")
+    if vc in ("Well below normal", "Below normal"):
+        nxt.append("Rule out pests and disease (e.g. fall armyworm)")
+    if stress and solar is not None:
+        nxt.append(f"Assess solar-powered irrigation where water exists ({solar:.1f} kWh/m²/day)")
+    if level == "normal":
+        nxt.append("Keep monitoring monthly")
+    if level == "unknown":
+        nxt.append("Fill the missing data layers (monthly update)")
+    short = {"concern": head, "normal": "Conditions close to or better than normal",
+             "unknown": head}.get(level) or "Early sign: " + moist[0].replace("root-zone soil moisture", "soil moisture")
+    return {"level": level, "headline": head, "short": short, "paragraphs": paras, "maize": maize, "gaps": gaps,
+            "considerations": cons, "concern": concern, "why": why, "next": nxt, "classes": {"rainfall": rc, "temperature": tc,
                                                                    "vegetation": vc, "soil_moisture": sc,
                                                                    "water_stress": ws}}
 

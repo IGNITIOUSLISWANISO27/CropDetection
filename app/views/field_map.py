@@ -5,8 +5,7 @@ from _lib import (get_data, page_title, build_map, show_map, badge, legend_html,
 
 data = get_data()
 A = data.assessments
-page_title("Field Map", "Where the assessed maize fields are and what their drought-risk class is. Boundaries are "
-           "drawn from the digitised field polygons; colours follow the risk classes used everywhere in FieldPriority.",
+page_title("Field Map", "The pilot maize fields, coloured by drought-risk class.",
            eyebrow="Geographical overview", icon_name="pin")
 
 status = status_by_field(data)

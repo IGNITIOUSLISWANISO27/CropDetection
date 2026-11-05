@@ -6,9 +6,7 @@ from _lib import (get_data, page_title, section, html_block, badge, risk_counts,
 
 data = get_data()
 A = data.assessments
-page_title("Risk Analysis", "How the assessed fields are spread across the drought-risk classes, where they are, and "
-           "what each class means. Every class comes from the FieldPriority drought-stress rules; this page only "
-           "presents them.", eyebrow="Drought-risk intelligence", icon_name="rise")
+page_title("Risk Analysis", "How the pilot fields spread across the drought-risk classes.", eyebrow="Drought-risk intelligence", icon_name="rise")
 
 counts = risk_counts(A)
 n = len(A)

@@ -6,8 +6,7 @@ from _reports import build_pdf, build_excel, build_geojson
 
 data = get_data()
 A = data.assessments
-page_title("Reports", "Professional summaries of FieldPriority assessments for presentations, research documentation "
-           "and decision-making. Choose what to include, check the preview, then download.",
+page_title("Reports", "Download field assessment summaries (PDF, Excel, GeoJSON).",
            eyebrow="Analytical outputs", icon_name="doc")
 
 with st.container(border=True):

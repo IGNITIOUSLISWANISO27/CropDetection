@@ -1,10 +1,11 @@
-"""Location report: one district, all six layers of evidence, in the brief's five sections."""
+"""Location intelligence: the key message first (what is happening, why it matters, what next), the connected
+evidence as one picture, then charts, map and crop evidence. Full detail sits in expanders."""
 import altair as alt
 import pandas as pd
 import streamlit as st
 from _lib import (html_block, icon, badge, national, monitored_fields, location_records, build_zambia_map, show_map,
-                  period_of, type_tag, conf_tag, evidence_line, class_chip, empty, link, interpret, kobo_photo,
-                  zmd_seasonal, zmd_alerts, zmd_cat_chip, zmd_time, ZMD, LEVELS, NCFG, NMON, RISK, E, C)
+                  period_of, type_tag, empty, link, interpret, kobo_photo, signal_chain_html, answer_cards_html,
+                  zmd_seasonal, zmd_alerts, zmd_cat_chip, ZMD, LEVELS, NCFG, NMON, E)
 
 nd = national()
 F = monitored_fields(nd)
@@ -14,11 +15,10 @@ provs = sorted(D["province"].unique())
 from fieldpriority.national.aggregate import zone_members
 from fieldpriority.national.zones import REGIONS as ZONES
 zcodes = [z for z in ["I", "IIa", "IIb", "II", "III"] if zone_members(nd, z)]
-OPTS = ["z:" + z for z in zcodes] + ["p:" + p for p in provs] + ["d:" + i for i in ids]
-names = {**{"z:" + z: f"Agricultural zone: {ZONES[z]['name']}, {ZONES[z]['short']} ({len(zone_members(nd, z))} districts)"
-            for z in zcodes},
-         **{"p:" + p: f"{p} Province (all {int((D['province'] == p).sum())} districts)" for p in provs},
-         **dict(zip("d:" + D["district_id"], D["district"] + " · " + D["province"] + " Province"))}
+OPTS = ["d:" + i for i in ids] + ["z:" + z for z in zcodes] + ["p:" + p for p in provs]
+names = {**{"z:" + z: f"Agricultural zone {ZONES[z]['name']} ({ZONES[z]['short']})" for z in zcodes},
+         **{"p:" + p: f"{p} Province" for p in provs},
+         **dict(zip("d:" + D["district_id"], D["district"] + " · " + D["province"]))}
 per = period_of(nd)
 
 qd, qprov, qz = st.query_params.get("district"), st.query_params.get("province"), st.query_params.get("zone")
@@ -27,11 +27,8 @@ if "loc_pick" not in st.session_state or (want and want != st.session_state.get(
     st.session_state["loc_pick"] = want or ("d:" + (F["district_id"].dropna().iloc[0] if len(F) and
                                                     F["district_id"].notna().any() else "solwezi"))
 
-html_block('<div class="fp-eyebrow">Location-specific intelligence report</div>')
-s1, s2 = st.columns([2, 1.2], vertical_alignment="bottom")
-pick = s1.selectbox("Location", OPTS, key="loc_pick", format_func=names.get,
-                    help="A province (all its districts together) or one district. Monitored pilot fields have their "
-                         "own field profile (Assessments).")
+s1, s2 = st.columns([3, 1], vertical_alignment="bottom")
+pick = s1.selectbox("Location", OPTS, key="loc_pick", format_func=names.get, label_visibility="collapsed")
 is_zone = pick.startswith("z:")
 is_prov = pick.startswith("p:") or is_zone          # both are groups of districts
 for k in ("district", "province", "zone"):
@@ -41,10 +38,9 @@ if is_zone:
     st.query_params["zone"] = zc
     from fieldpriority.national.aggregate import zone_view, zone_id
     recs, M, S_prov, members = zone_view(nd, NCFG, zc)
-    did = zone_id(zc)
+    did, prov = zone_id(zc), None
     here = F[F["district_id"].isin(members)] if len(F) else F
-    prov = None
-    name, sub = f"{ZONES[zc]['name']}: {ZONES[zc]['short']}", "Agricultural zone, Zambia"
+    name = f"Zone {ZONES[zc]['name']}: {ZONES[zc]['short']}"
     rows_d = D[D["district_id"].isin(members)]
 elif is_prov:
     prov = pick[2:]
@@ -53,7 +49,7 @@ elif is_prov:
     recs, M, S_prov, members = province_view(nd, NCFG, prov)
     did = province_id(prov)
     here = F[F["province"] == prov] if len(F) else F
-    name, sub = f"{prov} Province", "Zambia"
+    name = f"{prov} Province"
     rows_d = D[D["province"] == prov]
 else:
     did = pick[2:]
@@ -62,9 +58,9 @@ else:
     here = F[F["district_id"] == did] if len(F) else F
     members = [did]
     rows_d = D[D["district_id"] == did]
-    name, sub = rows_d.iloc[0]["district"], rows_d.iloc[0]["province"] + " Province, Zambia"
+    name = rows_d.iloc[0]["district"]
+kind = "zone" if is_zone else "province" if is_prov else "district"
 
-# monthly values for the charts and the per-month rainfall wording
 if not is_prov:
     M = nd.monthly[nd.monthly["district_id"] == did] if nd.available else \
         pd.DataFrame(columns=["district_id", "variable", "year", "month", "value"])
@@ -80,7 +76,7 @@ def month_table(var):
     for y, m in window:
         base = [t.get((y - k, m)) for k in range(1, nb + 1)]
         base = [b for b in base if b is not None and pd.notna(b)]
-        rows.append({"Month": f"{NMON[m]} {y}", "order": len(rows), "m": m, "This season": t.get((y, m)),
+        rows.append({"Month": f"{NMON[m]} {y}", "m": m, "This season": t.get((y, m)),
                      "Normal": sum(base) / len(base) if base else None})
     return pd.DataFrame(rows)
 
@@ -95,125 +91,57 @@ lab, col = LEVELS[it["level"]]
 
 with s2:
     if recs:
-        ev = pd.DataFrame(recs.values())
-        st.download_button("Download evidence (CSV)", ev.to_csv(index=False).encode(), f"FieldPriority_{did.replace(':', '_')}_evidence.csv",
-                           "text/csv", icon=":material/download:", width="stretch")
+        st.download_button("Evidence (CSV)", pd.DataFrame(recs.values()).to_csv(index=False).encode(),
+                           f"FieldPriority_{did.replace(':', '_')}_evidence.csv", "text/csv",
+                           icon=":material/download:", width="stretch")
 
-html_block(f"""<div class="fp-ph"><div style="width:58px;height:58px;border-radius:16px;background:#D9A21B;display:grid;
-place-items:center">{icon("field" if is_zone else "layers" if is_prov else "pin", 32, "#1F4D3A", 2.2)}</div><div style="flex:1"><div style="display:flex;gap:14px;
-align-items:center;flex-wrap:wrap"><h1>{E(name)}</h1><span class="fp-badge lg" style="background:{col};color:#fff;
-padding:6px 15px;border-radius:999px;font-weight:600">{E(lab)}</span></div><div class="meta">
-<span>{icon("layers", 15, "#F2C74E")}{E(sub) if not is_prov else (f"{len(members)} districts" + (", agricultural zone" if is_zone else ", Zambia"))}</span>
-<span>{icon("clock", 15, "#F2C74E")}Season data: {E(per)}</span>
-<span>{icon("field", 15, "#F2C74E")}{len(here)} monitored field(s)</span></div></div></div>""")
+# ---------------------------------------------------------------- header
+chips = []
+if is_zone:
+    chips += [f"{len(members)} districts", f"Rainfall {ZONES[zc]['rain']}"]
+elif is_prov:
+    chips += [f"{len(members)} districts"]
+else:
+    chips.append(f"{rows_d.iloc[0]['province']} Province")
+    z = recs.get("agro_zone") or {}
+    if z.get("status") == "ok":
+        chips.append(f"Zone {ZONES.get(z['class'], {}).get('name', z['class'])}")
+mz = recs.get("maize_share_pct") or {}
+if mz.get("status") == "ok":
+    chips.append(f"{mz['class']} · {float(mz['value']):.0f}% of land under maize")
+chips.append(f"Season {per}")
+if len(here):
+    chips.append(f"{len(here)} monitored field(s)")
+html_block(f'<div class="fp-loc"><div style="width:52px;height:52px;border-radius:14px;background:#D9A21B;display:grid;'
+           f'place-items:center">{icon("field" if is_zone else "layers" if is_prov else "pin", 28, "#1F4D3A", 2.2)}'
+           f'</div><div><h1>{E(name)}</h1><div class="chips">{"".join(f"<span>{E(c)}</span>" for c in chips)}</div>'
+           f'</div><span class="lvl" style="background:{col}">{E(lab)}</span></div>')
 if not nd.available:
     empty("District layers have not been built yet. Run monthly_update.bat on the project computer, then "
           "sync_firebase.bat for the online dashboard.")
     st.stop()
 
+# ---------------------------------------------------------------- 1. the three answers
+short_sig = []
+for k, t in (("rainfall_anomaly_pct", "Rain"), ("soil_moisture_anomaly_pct", "Soil moisture"),
+             ("vegetation_anomaly_pct", "Vegetation"), ("temperature_deviation", "Temp.")):
+    r = recs.get(k) or {}
+    if r.get("status") == "ok":
+        short_sig.append(f"{t} {str(r['display']).split(' · ')[0]}")
+what_sub = " · ".join(short_sig) + " vs normal" if short_sig else "No indicators yet"
+why_sub = (f"{mz['class']} {kind} ({float(mz['value']):.0f}% of land under maize)." if mz.get("status") == "ok" else "")
+why_sub += (" " + it["why"][1]) if len(it["why"]) > 1 else ""
+html_block(answer_cards_html(it["short"], E(what_sub), it["why"][0], E(why_sub.strip()), it["next"] or
+                             ["Keep monitoring monthly"], col))
 
-def sec(n, title, sub=None):
-    html_block(f'<div class="fp-rep-h"><span class="n">{n}</span><span>{E(title)}</span></div>'
-               + (f'<div class="fp-sub" style="margin:-.3rem 0 .6rem">{sub}</div>' if sub else ""))
+# ---------------------------------------------------------------- 2. the connected evidence
+first = ". ".join(it["paragraphs"][0].split(". ")[:2]).rstrip(".") + "." if it["paragraphs"] else ""
+with st.container(border=True):
+    html_block(f'<div class="fp-panel-h"><span>{icon("layers", 18, "#1F4D3A")} How the signals connect</span>'
+               f'<span class="fp-mini">Hover a box for its source and date</span></div>')
+    html_block(signal_chain_html(recs, here, first))
 
-
-def card(title, rec, extra=""):
-    if not rec or rec.get("status") != "ok":
-        return (f'<div class="fp-ic"><div class="t">{E(title)}</div><div class="v" style="color:#7A8590;font-size:1.05rem">'
-                f'Not yet available</div><div class="e">{E((rec or {}).get("quality_note") or "")}</div></div>')
-    v = str(rec["display"]).split(" · ")[0]
-    return (f'<div class="fp-ic"><div class="t">{E(title)}{class_chip(rec.get("class")) if rec.get("class") != v else ""}</div>'
-            f'<div class="v">{E(v)}</div>{extra}'
-            f'<div>{type_tag(rec["data_type"])}{conf_tag(rec["confidence"])}</div><div class="e">{evidence_line(rec)}</div>'
-            + (f'<div class="e" style="color:#7A5300">{E(rec["quality_note"])}</div>' if rec.get("quality_note") else "")
-            + '</div>')
-
-
-# ================================================================ 1. location profile
-sec(1, "Location profile")
-p1, p2 = st.columns([1, 1.25], gap="medium")
-with p1:
-    maize = recs.get("maize_share_pct") or {}
-    maize_txt = maize.get("display") if maize.get("status") == "ok" else "Not yet available (needs the WorldCereal maize map export)"
-    fb = (f"{len(here)} monitored field(s) with digitised boundaries ({', '.join(sorted(set(here['pilot_short'])))} pilot)"
-          if len(here) else f"No field boundaries in the platform for this {'zone' if is_zone else 'province' if is_prov else 'district'} yet")
-    area = float(rows_d["area_km2"].sum())
-    if is_prov:
-        cen = rows_d.dissolve().geometry.iloc[0].representative_point()
-        lat, lon = cen.y, cen.x
-    else:
-        lat, lon = float(rows_d.iloc[0]["lat"]), float(rows_d.iloc[0]["lon"])
-    if is_zone:
-        pv = rows_d["province"].value_counts()
-        place = (f"<div>Provinces</div><div>{E(', '.join(f'{p} ({n})' for p, n in pv.items()))}</div>"
-                 f"<div>Districts</div><div>{len(members)}: districts whose largest part lies in this zone</div>")
-    elif is_prov:
-        place = f"<div>Province</div><div>{E(prov)}</div><div>Districts</div><div>{len(members)}</div>"
-    else:
-        place = (f"<div>Province</div><div>{E(rows_d.iloc[0]['province'])}</div>"
-                 f"<div>District</div><div>{E(rows_d.iloc[0]['district'])}</div>")
-    # agricultural zone row
-    zrec = location_records(nd, did).get("agro_zone") if not is_prov else None
-    approx = (nd.report.get("zones") or {}).get("official") is False
-    if is_zone:
-        Zr = ZONES[zc]
-        zone_txt = (f"{Zr['name']}: annual rainfall {Zr['rain']}. {Zr['about']}"
-                    + (" Approximated from rainfall; the official map is not yet loaded." if approx else ""))
-    elif is_prov:
-        zc_counts = {z: len(set(zone_members(nd, z)) & set(members)) for z in zcodes}
-        zone_txt = ", ".join(f"{ZONES[z]['name']}: {n} district(s)" for z, n in zc_counts.items() if n) or \
-            "Not yet available"
-    elif zrec and zrec.get("status") == "ok":
-        zone_txt = zrec["display"] + (" (approximate, from rainfall)" if approx else "")
-    else:
-        zone_txt = "Not yet available (needs October and May rainfall: run the monthly update)"
-    html_block(f"""<div class="fp-card"><div class="fp-kv">{place}
-<div>Area</div><div>{area:,.0f} km²</div>
-<div>Central point</div><div>{lat:.4f}, {lon:.4f}</div>
-<div>Agricultural zone</div><div>{E(zone_txt)}</div>
-<div>Maize-growing status</div><div>{E(maize_txt)}</div>
-<div>Field boundaries</div><div>{E(fb)}</div>
-<div>Boundary source</div><div class="fp-sub">{E(nd.report.get("boundaries_source", ""))}</div>
-</div></div>""")
-with p2:
-    show_map(build_zambia_map(nd, "zones" if is_zone else "rainfall", here, focus=members), height=330)
-
-if is_prov:
-    rows = ""
-    for r in rows_d.sort_values("district").itertuples():
-        rr = location_records(nd, r.district_id)
-        it_d = interpret(r.district, rr, NCFG["classes"])
-        lab_d, col_d = LEVELS[it_d["level"]]
-        cell = lambda k: E(str((rr.get(k) or {}).get("display") or "–"))
-        rows += (f'<tr><td><a href="{link("/location", district=r.district_id)}" target="_self"><b>{E(r.district)}</b></a></td>'
-                 f'<td>{cell("rainfall_anomaly_pct")}</td><td>{cell("temperature_deviation")}</td>'
-                 f'<td>{cell("water_stress")}</td><td><span style="color:{col_d};font-weight:600">{E(lab_d)}</span></td></tr>')
-    with st.expander(f"Districts in {name} ({len(rows_d)}): open any district's own report", expanded=False):
-        html_block('<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.88rem">'
-                   '<tr style="text-align:left;color:#5E6B63"><th>District</th><th>Rainfall vs normal</th>'
-                   '<th>Temperature vs normal</th><th>Water stress</th><th>Assessment</th></tr>' + rows + '</table></div>')
-
-# ================================================================ 2. environmental conditions
-sec(2, "Environmental conditions", f"Season to date ({E(per)}) compared with the same months of the previous "
-    f"{nb} seasons. " + (("Zone" if is_zone else "Province") + " values are area-weighted averages of its districts"
-                      if is_prov else "District averages")
-    + ": individual farms can differ.")
-c = st.columns(3)
-r_tot = recs.get("rainfall_total") or {}
-c[0].markdown(card("Rainfall", recs.get("rainfall_anomaly_pct"),
-                   f'<div class="fp-sub" style="margin-bottom:6px">{E(r_tot.get("display") or "")}</div>'),
-              unsafe_allow_html=True)
-tx = recs.get("tmax_mean") or {}
-c[1].markdown(card("Temperature", recs.get("temperature_deviation"),
-                   f'<div class="fp-sub" style="margin-bottom:6px">Mean {E((recs.get("temperature_mean") or {}).get("display") or "–")}'
-                   f' · hottest of each month {E(tx.get("display") or "–")}</div>'), unsafe_allow_html=True)
-c[2].markdown(card("Water stress", recs.get("water_stress")), unsafe_allow_html=True)
-c = st.columns(3)
-c[0].markdown(card("Vegetation condition", recs.get("vegetation_anomaly_pct")), unsafe_allow_html=True)
-c[1].markdown(card("Root-zone soil moisture", recs.get("soil_moisture_anomaly_pct")), unsafe_allow_html=True)
-c[2].markdown(card("Solar resource", recs.get("solar_resource")), unsafe_allow_html=True)
-
-# official outlook and warnings (ZMD), next to the observed conditions
+# official outlook (ZMD), one line
 zspec, ZS, ZON, _ = zmd_seasonal()
 try:
     ZT, zst = zmd_alerts(nd)
@@ -224,33 +152,26 @@ zadv = []
 if zspec is not None and len(ZS):
     Zm = ZS[ZS["district_id"].isin(members)]
     if is_prov:
-        cells = ""
-        for p in ZMD.PERIOD_ORDER:
-            cnt = Zm[Zm["period"] == p]["code"].value_counts()
-            cells += (f'<div><b>{p}</b> ' + " ".join(zmd_cat_chip(k, f"{ZMD.CATEGORIES[k][1]}: {n}", small=True)
-                                                    for k, n in cnt.items()) + "</div>")
-        zline = f'<div class="fp-sub" style="margin-bottom:4px">Districts by ZMD forecast category</div>{cells}'
+        djf = Zm[Zm["period"] == "DJF"]["code"].value_counts()
+        zline = "Dec–Feb: " + " ".join(zmd_cat_chip(k, f"{ZMD.CATEGORIES[k][1]} · {n}", small=True)
+                                       for k, n in djf.items())
     else:
         Zr = Zm.set_index("period")
-        zline = " ".join(f'<span style="white-space:nowrap"><b>{p}</b> '
-                         + ("".join(zmd_cat_chip(c, small=True) for c in str(Zr.loc[p, "codes"]).split("|") if c)
-                            or zmd_cat_chip(None, small=True)) + '</span>'
-                         for p in ZMD.PERIOD_ORDER if p in Zr.index)
-        if Zr["split"].any():
-            zline += ('<div class="fp-sub" style="margin-top:2px">Two categories: ZMD gives different categories to '
-                      'parts of this district (see Weather &amp; warnings).</div>')
-        onset = ZON.set_index("district_id").loc[members[0], "text"]
-        zline += f'<div class="fp-sub" style="margin-top:4px">Start of the rains: {E(onset)}</div>'
+        zline = " ".join(f'<span style="white-space:nowrap"><b>{p}</b> ' + "".join(
+            zmd_cat_chip(c, small=True) for c in str(Zr.loc[p, "codes"]).split("|") if c) + '</span>'
+            for p in ZMD.PERIOD_ORDER if p in Zr.index)
+        zline += f' · Rains start: <b>{E(ZON.set_index("district_id").loc[members[0], "text"])}</b>'
         zadv = ZMD.advisories_for(zspec, ZMD.district_ranks(ZS, members[0]))
-    warn = (f'<b style="color:#B9342B">{len(zact)} ZMD warning(s) in force</b>: ' + E("; ".join(zact["headline"]))
-            if len(zact) else ("No ZMD weather warning in force" if zst.get("have") else "ZMD warnings not checked"))
-    html_block(f'<div class="fp-card" style="margin-top:.7rem"><div class="fp-panel-h"><span>{icon("storm", 18, "#1F4E80")}'
-               f' Official outlook: ZMD seasonal rainfall forecast {E(zspec["season"])}</span>'
-               f'<a href="{link("/weather", district=None if is_prov else did)}" target="_self">Weather &amp; warnings →</a>'
-               f'</div>{zline}<div style="margin-top:6px;font-size:.9rem">{warn}</div>'
-               f'<div style="margin-top:6px">{type_tag("official")}<span class="fp-sub">Zambia Meteorological Department, '
-               f'issued {E(zmd_time(zspec["issued"] + "T12:00:00+02:00", False))}. A forecast of the coming season, '
-               f'not an observation.</span></div></div>')
+    warn = (f'<b style="color:#B9342B">{len(zact)} ZMD warning(s) in force</b>' if len(zact) else
+            "No ZMD warning in force" if zst.get("have") else "")
+    html_block(f'<div class="fp-zban" style="background:#EEF3F8;border:1px solid #CFDCE8;color:#14233A;margin:.7rem 0">'
+               f'<div class="ic" style="background:#1F4E80;color:#fff">{icon("storm", 20)}</div><div style="flex:1;'
+               f'min-width:260px"><b>ZMD rainfall outlook {E(zspec["season"])}</b> &nbsp;{zline}'
+               f'<div class="fp-mini" style="margin-top:3px">{warn}</div></div>'
+               f'<a href="{link("/weather", district=None if is_prov else did)}" target="_self">Weather &amp; '
+               f'warnings →</a></div>')
+
+# ---------------------------------------------------------------- 3. visuals: map and charts
 
 
 def _style(ch):
@@ -258,152 +179,128 @@ def _style(ch):
                                                             titleColor="#5E6B63", gridColor="#ECE7DB")
 
 
-g1, g2 = st.columns(2, gap="medium")
-with g1:
-    if len(rain_m) and rain_m["This season"].notna().any():
-        order = list(rain_m["Month"])
-        b = alt.Chart(rain_m).mark_bar(size=26, cornerRadiusEnd=4, color="#4C78A8").encode(
-            x=alt.X("Month:O", sort=order, title=None, axis=alt.Axis(labelAngle=0)),
-            y=alt.Y("This season:Q", title="Rainfall (mm)"),
-            tooltip=["Month", alt.Tooltip("This season:Q", format=".0f"), alt.Tooltip("Normal:Q", format=".0f")])
-        n = alt.Chart(rain_m).mark_tick(color="#1E2A24", thickness=3, size=30).encode(
-            x=alt.X("Month:O", sort=order), y="Normal:Q")
-        st.altair_chart(_style((b + n).properties(title="Monthly rainfall (bars) vs normal (black marks)", height=230)),
-                        width="stretch")
-with g2:
-    tm = month_table("t2m")
-    if len(tm) and tm["This season"].notna().any():
-        order = list(tm["Month"])
-        lt = tm.melt(id_vars=["Month"], value_vars=["This season", "Normal"], var_name="Series", value_name="°C")
-        ch = alt.Chart(lt).mark_line(point=True, strokeWidth=2.5).encode(
-            x=alt.X("Month:O", sort=order, title=None, axis=alt.Axis(labelAngle=0)),
-            y=alt.Y("°C:Q", scale=alt.Scale(domain=[float(lt["°C"].min()) - 1, float(lt["°C"].max()) + 1]),
-                    title="Mean temperature (°C)"),
-            color=alt.Color("Series:N", scale=alt.Scale(domain=["This season", "Normal"], range=["#B9342B", "#9AA39D"]),
-                            legend=alt.Legend(orient="bottom", title=None)),
-            tooltip=["Month", "Series", alt.Tooltip("°C:Q", format=".1f")])
-        st.altair_chart(_style(ch.properties(title="Monthly temperature vs normal", height=230)), width="stretch")
-
-# seasonal comparison: the same months in each of the last seasons, rainfall and temperature side by side
-if is_prov:
-    S = S_prov.copy()
-else:
-    S = nd.seasons[nd.seasons["district_id"] == did].copy() if nd.seasons is not None else pd.DataFrame()
-if len(S):
-    S = S.sort_values("season_start")
-    S["current"] = S["current"].astype(str).str.lower().isin(["true", "1"])
-    S["Which"] = S["current"].map({True: "This season", False: "Earlier seasons"})
-    S["Season"] = S["season"]
-    seasons_order = list(S["Season"])
-    h1, h2 = st.columns(2, gap="medium")
-    for col_, var, title, ytitle, fmt, colors in (
-            (h1, "rainfall_mm", "Rainfall in the same months, by season", "Rainfall (mm)", ".0f",
-             ["#D9A21B", "#9DB8A5"]),
-            (h2, "t2m", "Mean temperature in the same months, by season", "Mean temperature (°C)", ".1f",
-             ["#B9342B", "#9AA39D"])):
-        T = S.dropna(subset=[var])
-        if T.empty:
-            continue
-        with col_:
-            x = alt.X("Season:O", title=None, sort=seasons_order, axis=alt.Axis(labelAngle=-45, labelOverlap=False))
-            color = alt.Color("Which:N", scale=alt.Scale(domain=["This season", "Earlier seasons"], range=colors),
-                              legend=None)
-            tip = ["Season", alt.Tooltip(f"{var}:Q", format=fmt, title=ytitle)]
-            if var == "rainfall_mm":
-                ch = alt.Chart(T).mark_bar(cornerRadiusEnd=3).encode(x=x, y=alt.Y(f"{var}:Q", title=ytitle),
-                                                                     color=color, tooltip=tip)
-            else:
-                dom = [float(T[var].min()) - 0.5, float(T[var].max()) + 0.5]
-                y = alt.Y(f"{var}:Q", title=ytitle, scale=alt.Scale(domain=dom))
-                ch = alt.Chart(T).mark_line(color="#CFC6B2", strokeWidth=2).encode(x=x, y=y) + \
-                    alt.Chart(T).mark_point(filled=True, size=110).encode(x=x, y=y, color=color, tooltip=tip)
-            mean = alt.Chart(pd.DataFrame({"y": [float(T[~T["current"]][var].mean())]})).mark_rule(
-                color="#1E2A24", strokeDash=[4, 3]).encode(y="y:Q")
-            st.altair_chart(_style((ch + mean).properties(title=title, height=240, padding={"top": 14, "left": 4, "right": 4, "bottom": 4})).configure_title(anchor="start", offset=8),
-                            width="stretch")
-            rank = T.sort_values(var).reset_index(drop=True)
-            if rank["current"].any():
-                pos = int(rank.index[rank["current"]][0]) + 1
-                st.caption(f"This season ranks {pos} of {len(T)} from " + ("driest to wettest" if var == "rainfall_mm"
-                           else "coolest to warmest") + " for these months. Dashed line: the normal.")
-
-# ================================================================ 3. crop condition and verification
-sec(3, "Crop condition and verification", "Ground evidence and satellite observations of the crop itself.")
-if len(here):
-    rows = ""
-    for r in here.itertuples():
-        rows += (f'<tr><td><a href="{link("/assessments", area=r.pilot, field=str(r.field_id))}" target="_self">'
-                 f'<b>{E(str(r.field_id))}</b></a><div class="fp-sub">{E(r.pilot_short)} pilot · {r.area_ha:.2f} ha</div></td>'
-                 f'<td>Maize {type_tag("field_observation") if r.visits else ""}</td>'
-                 f'<td>{E(str(r.growth_stage or "Unknown"))}</td><td>{badge(r.risk_level)}</td>'
-                 f'<td>{E(str(r.data_confidence))}</td><td>{E(str(r.verification))}</td>'
-                 f'<td>{r.visits} visit(s) · {r.photos} photo(s)</td></tr>')
-    html_block('<div class="fp-card" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.88rem">'
-               '<tr style="text-align:left;color:#5E6B63"><th>Field</th><th>Crop</th><th>Growth stage</th>'
-               '<th>Field risk class</th><th>Data confidence</th><th>Verification</th><th>Photographic evidence</th></tr>'
-               + rows + '</table><div class="fp-sub" style="margin-top:8px">Field risk classes come from Sentinel-2 '
-               'greenness (10 m) and the drought-stress rules for the field period '
-               + E(", ".join(sorted(set(str(p) for p in here["period"])))) + '. Open a field for its photos, satellite '
-               'trends and visit records.</div></div>')
-    pics = [(r.field_id, k, when, a) for r in here.itertuples() for k, when, a in (r.pics or [])]
-    if pics:
-        html_block(f'<div class="fp-panel-h" style="margin-top:.8rem"><span>{icon("camera", 18, "#1F4D3A")} '
-                   f'Photographic evidence from field visits</span>{type_tag("field_observation")}</div>')
-        pc = st.columns(4)
-        shown = 0
-        for i, (fid, kind, when, a) in enumerate(pics[:8]):
-            img = kobo_photo(a.get("download_medium_url") or a.get("download_url"))
-            with pc[i % 4]:
-                if img:
-                    st.image(img, caption=f"Field {fid} · {kind} · {when}", width="stretch")
-                    shown += 1
+v1, v2 = st.columns([1, 1.35], gap="medium")
+with v1:
+    show_map(build_zambia_map(nd, "zones" if is_zone else "rainfall", here, focus=members), height=380)
+with v2:
+    S = S_prov.copy() if is_prov else (nd.seasons[nd.seasons["district_id"] == did].copy()
+                                       if nd.seasons is not None else pd.DataFrame())
+    tabs = st.tabs(["Rainfall by month", "Temperature by month", "Rainfall by season", "Temperature by season"])
+    with tabs[0]:
+        if len(rain_m) and rain_m["This season"].notna().any():
+            order = list(rain_m["Month"])
+            b = alt.Chart(rain_m).mark_bar(size=26, cornerRadiusEnd=4, color="#4C78A8").encode(
+                x=alt.X("Month:O", sort=order, title=None, axis=alt.Axis(labelAngle=0)),
+                y=alt.Y("This season:Q", title="Rainfall (mm)"),
+                tooltip=["Month", alt.Tooltip("This season:Q", format=".0f"), alt.Tooltip("Normal:Q", format=".0f")])
+            n = alt.Chart(rain_m).mark_tick(color="#1E2A24", thickness=3, size=30).encode(
+                x=alt.X("Month:O", sort=order), y="Normal:Q")
+            st.altair_chart(_style((b + n).properties(height=290)), width="stretch")
+            st.caption("Bars: this season. Black marks: normal.")
+    with tabs[1]:
+        tm = month_table("t2m")
+        if len(tm) and tm["This season"].notna().any():
+            order = list(tm["Month"])
+            lt = tm.melt(id_vars=["Month"], value_vars=["This season", "Normal"], var_name="Series", value_name="°C")
+            ch = alt.Chart(lt).mark_line(point=True, strokeWidth=2.5).encode(
+                x=alt.X("Month:O", sort=order, title=None, axis=alt.Axis(labelAngle=0)),
+                y=alt.Y("°C:Q", scale=alt.Scale(domain=[float(lt["°C"].min()) - 1, float(lt["°C"].max()) + 1]),
+                        title="Mean temperature (°C)"),
+                color=alt.Color("Series:N", scale=alt.Scale(domain=["This season", "Normal"], range=["#B9342B", "#9AA39D"]),
+                                legend=alt.Legend(orient="bottom", title=None)),
+                tooltip=["Month", "Series", alt.Tooltip("°C:Q", format=".1f")])
+            st.altair_chart(_style(ch.properties(height=290)), width="stretch")
+    if len(S):
+        S = S.sort_values("season_start")
+        S["current"] = S["current"].astype(str).str.lower().isin(["true", "1"])
+        S["Which"] = S["current"].map({True: "This season", False: "Earlier seasons"})
+        S["Season"] = S["season"]
+        so = list(S["Season"])
+        for tab, var, yt, fmt, colors in ((tabs[2], "rainfall_mm", "Rainfall (mm)", ".0f", ["#D9A21B", "#9DB8A5"]),
+                                          (tabs[3], "t2m", "Mean temperature (°C)", ".1f", ["#B9342B", "#9AA39D"])):
+            T = S.dropna(subset=[var])
+            if T.empty:
+                continue
+            with tab:
+                x = alt.X("Season:O", title=None, sort=so, axis=alt.Axis(labelAngle=-45, labelOverlap=False))
+                color = alt.Color("Which:N", scale=alt.Scale(domain=["This season", "Earlier seasons"], range=colors),
+                                  legend=None)
+                tip = ["Season", alt.Tooltip(f"{var}:Q", format=fmt, title=yt)]
+                if var == "rainfall_mm":
+                    ch = alt.Chart(T).mark_bar(cornerRadiusEnd=3).encode(x=x, y=alt.Y(f"{var}:Q", title=yt),
+                                                                         color=color, tooltip=tip)
                 else:
-                    html_block(f'<div class="fp-photo">{icon("camera", 20, "#1F4D3A")} <b>Field {E(str(fid))}: '
-                               f'{kind} photo</b> · {E(str(when))}<br><a href="'
-                               f'{E(str(a.get("download_medium_url") or a.get("download_url")))}" target="_blank">'
-                               f'Open in KoboToolbox</a></div>')
-        if len(pics) > 8:
-            st.caption(f"{len(pics) - 8} more photo(s) in the field profiles.")
-        if not shown:
-            st.caption("Photos open in KoboToolbox (sign-in needed). To show them here, add KOBO_TOKEN to the "
-                       "app's secrets.")
-else:
-    empty(f"No monitored fields and no field reports in {E(name)} yet. Crop identification, growth stage and "
-          "photographic evidence come from field visits (KoboToolbox) to monitored fields.")
-veg = recs.get("vegetation_anomaly_pct") or {}
-st.caption(("Zone" if is_zone else "Province" if is_prov else "District") + " satellite vegetation: " + (veg.get("display") if veg.get("status") == "ok" else
-           "not yet available (MODIS NDVI district export pending).") + " Crop type at district level: "
-           + ("see maize-growing status above." if (recs.get("maize_share_pct") or {}).get("status") == "ok"
-              else "not yet mapped."))
+                    y = alt.Y(f"{var}:Q", title=yt, scale=alt.Scale(domain=[float(T[var].min()) - .5,
+                                                                          float(T[var].max()) + .5]))
+                    ch = alt.Chart(T).mark_line(color="#CFC6B2", strokeWidth=2).encode(x=x, y=y) + \
+                        alt.Chart(T).mark_point(filled=True, size=110).encode(x=x, y=y, color=color, tooltip=tip)
+                mean = alt.Chart(pd.DataFrame({"y": [float(T[~T["current"]][var].mean())]})).mark_rule(
+                    color="#1E2A24", strokeDash=[4, 3]).encode(y="y:Q")
+                st.altair_chart(_style((ch + mean).properties(height=270)), width="stretch")
+                rank = T.sort_values(var).reset_index(drop=True)
+                if rank["current"].any():
+                    pos = int(rank.index[rank["current"]][0]) + 1
+                    st.caption(f"Same months each season. This season ranks {pos} of {len(T)} from "
+                               + ("driest to wettest" if var == "rainfall_mm" else "coolest to warmest")
+                               + ". Dashed line: normal.")
 
-# ================================================================ 4. integrated interpretation
-sec(4, "Integrated interpretation", "How the indicators relate. Cautious by design: evidence of possible stress, "
-    "not proof of crop damage.")
-html_block(f'<div class="fp-interp"><div style="font:700 1.05rem var(--fh);margin-bottom:.4rem;color:{col}">'
-           f'{E(it["headline"])}</div>' + "".join(f"<p style='margin:.35rem 0'>{E(p)}</p>" for p in it["paragraphs"])
-           + '</div>')
-i1, i2 = st.columns(2, gap="medium")
-with i1:
-    html_block('<div class="fp-card"><h4>How this may affect maize</h4><ul class="fp-att">'
-               + "".join(f"<li>{E(x)}</li>" for x in it["maize"]) + "</ul></div>")
-with i2:
-    html_block('<div class="fp-card"><h4>What the assessment does not include yet</h4><ul class="fp-att">'
-               + ("".join(f"<li>{E(x)}</li>" for x in it["gaps"]) or "<li>All layers are included.</li>")
-               + "</ul></div>")
+# ---------------------------------------------------------------- 4. crop evidence (only where fields exist)
+if len(here):
+    with st.container(border=True):
+        html_block(f'<div class="fp-panel-h"><span>{icon("camera", 18, "#1F4D3A")} Crop evidence from monitored '
+                   f'fields</span>{type_tag("field_observation")}</div>')
+        fc = st.columns(min(len(here), 3))
+        for i, r in enumerate(here.itertuples()):
+            with fc[i % len(fc)]:
+                html_block(f'<div class="fp-card" style="padding:12px 14px"><div style="display:flex;justify-content:'
+                           f'space-between;align-items:center"><a href="{link("/assessments", area=r.pilot, field=str(r.field_id))}" '
+                           f'target="_self"><b>Field {E(str(r.field_id))}</b></a>{badge(r.risk_level)}</div>'
+                           f'<div class="fp-mini" style="margin-top:4px">{E(r.pilot_short)} pilot · {r.area_ha:.2f} ha · '
+                           f'maize · stage: {E(str(r.growth_stage or "unknown"))}<br>{E(str(r.verification))} · '
+                           f'{r.visits} visit(s), {r.photos} photo(s)</div></div>')
+        pics = [(r.field_id, k, when, a) for r in here.itertuples() for k, when, a in (r.pics or [])]
+        if pics:
+            pc = st.columns(4)
+            shown = 0
+            for i, (fid, kind_, when, a) in enumerate(pics[:4]):
+                img = kobo_photo(a.get("download_medium_url") or a.get("download_url"))
+                with pc[i]:
+                    if img:
+                        st.image(img, caption=f"Field {fid} · {kind_} · {when}", width="stretch")
+                        shown += 1
+                    else:
+                        html_block(f'<div class="fp-photo" style="font-size:.85rem">{icon("camera", 16, "#1F4D3A")} '
+                                   f'<a href="{E(str(a.get("download_medium_url") or a.get("download_url")))}" '
+                                   f'target="_blank">{E(kind_)} photo · field {E(str(fid))} · {E(str(when))}</a></div>')
+            if not shown:
+                st.caption("Photos open in KoboToolbox (add KOBO_TOKEN to the app secrets to show them here).")
 
-# ================================================================ 5. practical considerations
-sec(5, "Practical considerations", "Possible next steps to discuss. The platform supports decisions; it does not "
-    "make them.")
-html_block('<div class="fp-card"><ul class="fp-act-list" style="margin:0;padding:0">'
-           + "".join(f"<li>{E(x)}</li>" for x in it["considerations"]) + "</ul></div>")
-if zadv:
-    html_block('<div class="fp-card" style="margin-top:.7rem"><h4>ZMD advice for farmers in this district</h4>'
-               '<ul class="fp-att">' + "".join(f"<li>{E(x)}</li>" for x in zadv) + '</ul><div>' + type_tag("official")
-               + '<span class="fp-sub">From the ZMD seasonal rainfall forecast bulletin, chosen by the categories '
-               'ZMD gives this district.</span></div></div>')
+# ---------------------------------------------------------------- details, one click away
+with st.expander("Full interpretation and next steps"):
+    for p in it["paragraphs"]:
+        st.markdown(p)
+    st.markdown("**How this may affect maize**\n" + "\n".join(f"- {x}" for x in it["maize"]))
+    st.markdown("**Practical considerations**\n" + "\n".join(f"- {x}" for x in it["considerations"]))
+    if zadv:
+        st.markdown("**ZMD advice for farmers here** (seasonal forecast bulletin)\n" + "\n".join(f"- {x}" for x in zadv))
+    if it["gaps"]:
+        st.markdown("**Not yet included:** " + "; ".join(it["gaps"]) + ".")
 
-# ================================================================ evidence register
-with st.expander("Evidence register: every indicator with its source, date, coverage and confidence"):
+if is_prov:
+    with st.expander(f"Districts in {name} ({len(rows_d)})"):
+        tab = []
+        for r in rows_d.sort_values("district").itertuples():
+            rr = location_records(nd, r.district_id)
+            itd = interpret(r.district, rr, NCFG["classes"])
+            cell = lambda k: str((rr.get(k) or {}).get("display") or "–").split(" · ")[0]
+            tab.append({"District": r.district, "Assessment": LEVELS[itd["level"]][0],
+                        "Rainfall": cell("rainfall_anomaly_pct"), "Soil moisture": cell("soil_moisture_anomaly_pct"),
+                        "Vegetation": cell("vegetation_anomaly_pct"), "Temperature": cell("temperature_deviation"),
+                        "Report": f"/location?district={r.district_id}"})
+        st.dataframe(pd.DataFrame(tab), hide_index=True, width="stretch",
+                     column_config={"Report": st.column_config.LinkColumn("Report", display_text="Open")})
+
+with st.expander("Evidence register: source, date, coverage and confidence of every value"):
     ev = pd.DataFrame(recs.values())
     if len(ev):
         from fieldpriority.evidence import DATA_TYPES
@@ -412,4 +309,5 @@ with st.expander("Evidence register: every indicator with its source, date, cove
                 "source": "Source", "period_label": "Period", "resolution": "Resolution", "coverage": "Coverage",
                 "baseline": "Normal (baseline)", "quality_note": "Notes"}
         st.dataframe(ev[list(cols)].rename(columns=cols), hide_index=True, width="stretch")
-        st.caption("Kinds of data: " + "; ".join(f"{v[0]} = {v[1]}" for v in DATA_TYPES.values()))
+st.caption("District values are averages: individual farms can differ. The platform supports local judgement; "
+           "review decisions with agricultural extension officers.")

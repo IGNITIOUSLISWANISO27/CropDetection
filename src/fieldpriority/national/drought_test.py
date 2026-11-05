@@ -132,6 +132,8 @@ def run(offline=False, only=None, log=print):
                "reference": spec["reference"], "generated": dt.datetime.now().isoformat(timespec="seconds"),
                "offline": offline, "runs": results}
     (out_root / "summary.json").write_text(json.dumps(summary, indent=2, default=str))
+    # copy kept with the code, so the online dashboard's About page can show the result
+    (root / "config" / "drought_test_results.json").write_text(json.dumps(summary, indent=1, default=str))
     if rows:
         pd.concat(rows).to_csv(out_root / "district_results.csv", index=False)
     (out_root / "DROUGHT_TEST_RESULTS.md").write_text(report_md(summary), encoding="utf-8")
