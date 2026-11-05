@@ -14,11 +14,11 @@ st.markdown(CSS + CSS_V2 + CSS_V3, unsafe_allow_html=True)
 
 # ---- pilot area (Solwezi, Chongwe, ...) for the field pages, kept in the URL as ?area=
 from _lib import PILOTS, _cfg
+qa = str(st.query_params.get("area") or "").lower()
 if "pilot" not in st.session_state:
-    qa = str(st.query_params.get("area") or "").lower()
-    st.session_state["pilot"] = qa if qa in PILOTS else PILOTS[0]
-elif str(st.query_params.get("area") or "").lower() in PILOTS and st.query_params.get("area") != st.session_state["pilot"]:
-    st.session_state["pilot"] = st.query_params["area"]          # a link to another pilot's field
+    st.session_state["pilot"] = qa if qa in PILOTS else st.session_state.get("_area_seen") or PILOTS[0]
+elif qa in PILOTS and qa != st.session_state.get("_area_seen"):
+    st.session_state["pilot"] = qa          # a link to another pilot's field (the URL changed, not the switch)
 V = Path(__file__).resolve().parent / "views"
 FIELD_PAGES = {"field-map", "assessments", "risk-analysis", "data-quality", "reports"}
 pages = {
@@ -40,5 +40,6 @@ if len(PILOTS) > 1 and nav.url_path in FIELD_PAGES:
                              format_func=lambda p: _cfg(p)["pilot_short"], label_visibility="collapsed",
                              help="Each pilot area has its own fields, assessments, alerts and field visits.")
 st.query_params["area"] = st.session_state["pilot"]
+st.session_state["_area_seen"] = st.session_state["pilot"]
 st.session_state["fp_data"] = load_data()
 nav.run()
