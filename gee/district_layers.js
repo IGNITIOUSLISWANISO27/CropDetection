@@ -1,4 +1,4 @@
-// FieldPriority: Zambia district layers from Google Earth Engine (for Person 1, GIS).  Version 2 (5 Nov 2026)
+// FieldPriority: Zambia district layers from Google Earth Engine (for Person 1, GIS).  Version 3 (5 Nov 2026)
 //
 // Produces ONE table, gee_district_layers.csv, with the columns district_id, variable, year, month, value:
 //   ndvi          MODIS MOD13Q1 NDVI (250 m), monthly mean over CROPLAND pixels of each district
@@ -17,6 +17,17 @@ var DISTRICTS = ee.FeatureCollection('projects/YOUR-PROJECT/assets/zambia_distri
 var SEASON_START = 2025;            // first year of the season shown (2025 = the 2025/26 season)
 var MONTHS = [11, 12, 1, 2, 3, 4];  // season months, in order (Nov and Dec belong to SEASON_START)
 var BASELINE_SEASONS = 10;
+
+// ---------------------------------------------------------------- check that DISTRICTS is the right upload
+var N_DISTRICTS = DISTRICTS.size().getInfo();
+var HAS_ID = ee.List(DISTRICTS.first().propertyNames()).contains('dist_id').getInfo();
+if (!HAS_ID || N_DISTRICTS !== 116) {
+  throw new Error('DISTRICTS is not the FieldPriority district file: it has ' + N_DISTRICTS + ' districts' +
+    (HAS_ID ? '' : ' and no dist_id column') + '. Upload the files inside gee/zambia_districts_for_gee.zip ' +
+    '(116 districts) as a new asset and put ITS Table ID in DISTRICTS. Other district files (e.g. GADM ZMB_adm2, ' +
+    '72 districts) cannot be matched to the dashboard.');
+}
+print('Districts OK: 116 with dist_id');
 
 // ---------------------------------------------------------------- datasets (only the ones that exist)
 function firstExisting(ids) {
