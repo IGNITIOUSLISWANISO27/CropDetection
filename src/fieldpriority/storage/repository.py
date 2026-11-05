@@ -26,6 +26,18 @@ class DashboardData:
     ledger: pd.DataFrame = None          # every prediction ever issued (alerts_issued, rule 10): field history
 
 
+def latest_per_field(docs):
+    """One assessment per field: the most recent run. Firestore keeps the documents of earlier seasons (their id
+    includes the period), so without this a field would appear once per season it was ever assessed."""
+    best = {}
+    for d in docs:
+        k = (str(d.get("assessed_at") or ""), str(d.get("assessment_date") or ""), str(d.get("period") or ""))
+        f = d.get("field_id")
+        if f not in best or k >= best[f][0]:
+            best[f] = (k, d)
+    return [best[f][1] for f in sorted(best, key=str)]
+
+
 def flatten_assessments(docs):
     rows = []
     for d in docs:
@@ -94,6 +106,13 @@ class LocalRepository:
                   "assessment_date": a0.get("assessment_date")})
 
 
+def _current_queue(rows, docs):
+    """Verification queue of the latest run only (older alerts stay in the ledger, alerts_issued)."""
+    q = pd.DataFrame(rows).drop(columns=["_doc_id"], errors="ignore")
+    ids = {d.get("alert_id") for d in docs if d.get("alert_id")}
+    return q[q["alert_id"].isin(ids)].reset_index(drop=True) if len(q) and "alert_id" in q and ids else q
+
+
 class FirebaseRepository:
     def __init__(self, store):
         self.store = store
@@ -107,7 +126,7 @@ class FirebaseRepository:
             [{"Field_ID": d["Field_ID"], "area_ha": d.get("area_ha"),
               "geometry": shape(json.loads(d["geometry_geojson"]))} for d in fdocs],
             geometry="geometry", crs=4326).sort_values("Field_ID").reset_index(drop=True)
-        docs = sorted(s.read("risk_assessments"), key=lambda d: d["field_id"])
+        docs = latest_per_field(s.read("risk_assessments"))
         runs = s.read("runs")
         ver = s.read("verifications")
         return DashboardData(
@@ -115,7 +134,7 @@ class FirebaseRepository:
             fields=fields, assessments=flatten_assessments(docs),
             monthly=pd.DataFrame(s.read("indicators")).drop(columns=["_doc_id"], errors="ignore"),
             season=pd.DataFrame(s.read("season_features")).drop(columns=["_doc_id"], errors="ignore").sort_values("Field_ID"),
-            queue=pd.DataFrame(s.read("alerts")).drop(columns=["_doc_id"], errors="ignore"),
+            queue=_current_queue(s.read("alerts"), docs),
             verifications=pd.DataFrame(ver).drop(columns=["_doc_id"], errors="ignore") if ver else _empty([]),
             metrics=s.read_doc("metrics", "validation_latest"),
             report=sorted(runs, key=lambda r: str(r.get("run_at")))[-1] if runs else {},

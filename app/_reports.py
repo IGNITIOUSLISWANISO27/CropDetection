@@ -26,7 +26,7 @@ def _map_png(data, A):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     g = data.fields[data.fields["Field_ID"].isin(A["field_id"])].to_crs(3857)
-    lv = A.set_index("field_id")["risk_level"]
+    lv = A.drop_duplicates("field_id", keep="last").set_index("field_id")["risk_level"]
     fig, ax = plt.subplots(figsize=(6.2, 3.6), dpi=160)
     for r in g.itertuples():
         col = RISK.get(lv[r.Field_ID], {}).get("color", "#7A8590")
