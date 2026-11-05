@@ -124,7 +124,7 @@ kobo:
   asset_uid: aEBzGzmTMDb2XB87ZfKKNM
   # Public web link of the form (KoboToolbox > the form > Collect data > Online-Offline link), shown as
   # "Submit a field report" buttons on the dashboard. Leave empty to hide the buttons.
-  form_url: ""
+  form_url: "https://ee-eu.kobotoolbox.org/x/ouzzDVcT"
 
 # Tables imported from Earth Engine exports (import_gee.py) that feed the pipeline beside the rasters
 tables:
