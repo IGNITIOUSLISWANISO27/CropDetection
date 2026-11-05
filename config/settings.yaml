@@ -122,6 +122,9 @@ kobo:
   # Verification form. The API token is NOT stored here: put KOBO_TOKEN=<key> in the .env file.
   server: https://eu.kobotoolbox.org
   asset_uid: aEBzGzmTMDb2XB87ZfKKNM
+  # Public web link of the form (KoboToolbox > the form > Collect data > Online-Offline link), shown as
+  # "Submit a field report" buttons on the dashboard. Leave empty to hide the buttons.
+  form_url: ""
 
 # Tables imported from Earth Engine exports (import_gee.py) that feed the pipeline beside the rasters
 tables:

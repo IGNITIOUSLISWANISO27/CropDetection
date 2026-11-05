@@ -3,7 +3,7 @@ how the layers connect, then the key indicators. Everything else is one click aw
 import streamlit as st
 from _lib import (html_block, icon, footer, national, monitored_fields, national_summary, intel_summary_html,
                   zmd_banner, zmd_alerts, build_zambia_map, show_map, layer_available, location_records, link,
-                  hero_photo_html, answer_cards_html, national_answers, signal_list_html, LAYERS, LEVELS, NCFG, E,
+                  hero_photo_html, answer_cards_html, kobo_button, national_answers, signal_list_html, HOME_LAYERS, LAYERS, LEVELS, NCFG, E,
                   interpret)
 
 nd = national()
@@ -16,7 +16,8 @@ html_block(hero_photo_html(f"""
   <p>Rainfall, temperature, water, crops and solar potential, connected for every district and field.</p>
   <div class="chips"><span class="chip">MAIZE FIRST</span><span class="chip o">LOCATION-BASED</span></div>
   <div><a class="fp-btn gold" href="{link('/location')}" target="_self">{icon("pin", 18)} Open a location</a>
-  <a class="fp-btn ghost" href="{link('/map')}" target="_self">{icon("layers", 18)} Explore the map</a></div>"""))
+  <a class="fp-btn ghost" href="{link('/map')}" target="_self">{icon("layers", 18)} Explore the map</a></div>
+  <div style="margin-top:.8rem">{kobo_button("Report from the field (KoboToolbox)", small=True)}</div>"""))
 
 # official warnings only when something is in force
 try:
@@ -37,9 +38,9 @@ D = nd.districts.sort_values("district")
 left, right = st.columns([1.75, 1], gap="medium")
 with left:
     with st.container(border=True):
-        key = st.segmented_control("Map layer", list(LAYERS), default="rainfall", key="home_layer", width="stretch",
+        key = st.segmented_control("Map layer", HOME_LAYERS, default="overall", key="home_layer", width="stretch",
                                    format_func=lambda k: LAYERS[k]["short"] + ("" if layer_available(nd, k) else " (soon)"),
-                                   label_visibility="collapsed") or "rainfall"
+                                   label_visibility="collapsed") or "overall"
         show_map(build_zambia_map(nd, key, F, height=560), height=560)
         st.caption(LAYERS[key]["what"] + " Click a district for its full picture.")
 
@@ -76,10 +77,11 @@ with right:
             rec = location_records(nd, d.district_id)
             it = interpret(d.district, rec, NCFG["classes"])
             if it["level"] in ("concern", "watch"):
-                rain = (rec.get("rainfall_anomaly_pct") or {}).get("value")
-                ranked.append((0 if it["level"] == "concern" else 1, rain if isinstance(rain, (int, float)) else 0,
-                               d.district_id, d.district, rec, it))
-        ranked.sort(key=lambda x: (x[0], x[1]))
+                # signals closer to the crop weigh more: vegetation 3, soil moisture 2, rainfall 1, warmth 0.5
+                w = sum(3 if x.startswith("vegetation") else 2 if x.startswith("root-zone") else
+                        1 if x.startswith("rainfall") else .5 for x in it["concern"])
+                ranked.append((0 if it["level"] == "concern" else 1, -w, d.district_id, d.district, rec, it))
+        ranked.sort(key=lambda x: (x[0], x[1], x[3]))
     if ranked:
         _, _, sid, sname, srec, sit = ranked[0]
         title = "Spotlight: most in need of attention"

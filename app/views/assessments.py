@@ -1,6 +1,6 @@
 import pandas as pd
 import streamlit as st
-from _lib import (get_data, page_title, section, kpi, html_block, badge, src_tag, visits, verification_status,
+from _lib import (kobo_button, get_data, page_title, section, kpi, html_block, badge, src_tag, visits, verification_status,
                   status_by_field, field_location, period_text, period_year, sort_by_risk, build_map, show_map,
                   trend_chart, issue_labels, empty, icon, attachments, kobo_photo, RISK, RISK_ORDER, CFG, E, C)
 
@@ -199,6 +199,7 @@ if qp_field and qp_field in set(A["field_id"]):
 # ================================================================ list of assessments
 page_title("Assessments", "Each field's risk class, verification and visits. Open a field for its profile.",
            eyebrow="Field assessment records", icon_name="clipboard")
+html_block(kobo_button("Submit a field report (KoboToolbox)"))
 
 stat = A["field_id"].map(status)
 verified = int(stat.str.startswith("Verified").sum())

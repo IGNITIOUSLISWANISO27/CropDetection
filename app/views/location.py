@@ -4,7 +4,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 from _lib import (html_block, icon, badge, national, monitored_fields, location_records, build_zambia_map, show_map,
-                  period_of, type_tag, empty, link, interpret, kobo_photo, signal_chain_html, answer_cards_html,
+                  period_of, type_tag, empty, link, interpret, kobo_photo, signal_chain_html, answer_cards_html, kobo_button,
                   zmd_seasonal, zmd_alerts, zmd_cat_chip, ZMD, LEVELS, NCFG, NMON, E)
 
 nd = national()
@@ -178,7 +178,7 @@ with v1:
 with v2:
     S = S_prov.copy() if is_prov else (nd.seasons[nd.seasons["district_id"] == did].copy()
                                        if nd.seasons is not None else pd.DataFrame())
-    tabs = st.tabs(["Rainfall by month", "Temperature by month", "Rainfall by season", "Temperature by season"])
+    tabs = st.tabs(["Rainfall", "Soil moisture", "Vegetation", "Temperature", "Past seasons"])
     with tabs[0]:
         if len(rain_m) and rain_m["This season"].notna().any():
             order = list(rain_m["Month"])
@@ -190,27 +190,34 @@ with v2:
                 x=alt.X("Month:O", sort=order), y="Normal:Q")
             st.altair_chart(_style((b + n).properties(height=290)), width="stretch")
             st.caption("Bars: this season. Black marks: normal.")
-    with tabs[1]:
-        tm = month_table("t2m")
-        if len(tm) and tm["This season"].notna().any():
+    def line_tab(tab, var, ytitle, fmt, colour, pad):
+        tm = month_table(var)
+        with tab:
+            if not (len(tm) and tm["This season"].notna().any()):
+                st.caption("Not available for this location yet.")
+                return
             order = list(tm["Month"])
-            lt = tm.melt(id_vars=["Month"], value_vars=["This season", "Normal"], var_name="Series", value_name="°C")
+            lt = tm.melt(id_vars=["Month"], value_vars=["This season", "Normal"], var_name="Series", value_name="v")
+            lo, hi = float(lt["v"].min()), float(lt["v"].max())
             ch = alt.Chart(lt).mark_line(point=True, strokeWidth=2.5).encode(
                 x=alt.X("Month:O", sort=order, title=None, axis=alt.Axis(labelAngle=0)),
-                y=alt.Y("°C:Q", scale=alt.Scale(domain=[float(lt["°C"].min()) - 1, float(lt["°C"].max()) + 1]),
-                        title="Mean temperature (°C)"),
-                color=alt.Color("Series:N", scale=alt.Scale(domain=["This season", "Normal"], range=["#B9342B", "#9AA39D"]),
+                y=alt.Y("v:Q", scale=alt.Scale(domain=[lo - pad * (hi - lo + 1e-9), hi + pad * (hi - lo + 1e-9)]),
+                        title=ytitle),
+                color=alt.Color("Series:N", scale=alt.Scale(domain=["This season", "Normal"], range=[colour, "#9AA39D"]),
                                 legend=alt.Legend(orient="bottom", title=None)),
-                tooltip=["Month", "Series", alt.Tooltip("°C:Q", format=".1f")])
+                tooltip=["Month", "Series", alt.Tooltip("v:Q", format=fmt, title=ytitle)])
             st.altair_chart(_style(ch.properties(height=290)), width="stretch")
+
+    line_tab(tabs[1], "sm_rootzone", "Root-zone soil moisture (m³/m³)", ".3f", "#1F78B4", .4)
+    line_tab(tabs[2], "ndvi", "Vegetation greenness (NDVI)", ".2f", "#2E8B57", .4)
+    line_tab(tabs[3], "t2m", "Mean temperature (°C)", ".1f", "#B9342B", .4)
     if len(S):
         S = S.sort_values("season_start")
         S["current"] = S["current"].astype(str).str.lower().isin(["true", "1"])
         S["Which"] = S["current"].map({True: "This season", False: "Earlier seasons"})
         S["Season"] = S["season"]
         so = list(S["Season"])
-        for tab, var, yt, fmt, colors in ((tabs[2], "rainfall_mm", "Rainfall (mm)", ".0f", ["#D9A21B", "#9DB8A5"]),
-                                          (tabs[3], "t2m", "Mean temperature (°C)", ".1f", ["#B9342B", "#9AA39D"])):
+        for tab, var, yt, fmt, colors in ((tabs[4], "rainfall_mm", "Rainfall (mm)", ".0f", ["#D9A21B", "#9DB8A5"]),):
             T = S.dropna(subset=[var])
             if T.empty:
                 continue
@@ -241,7 +248,7 @@ with v2:
 if len(here):
     with st.container(border=True):
         html_block(f'<div class="fp-panel-h"><span>{icon("camera", 18, "#1F4D3A")} Crop evidence from monitored '
-                   f'fields</span>{type_tag("field_observation")}</div>')
+                   f'fields</span>{kobo_button("Add a field report", small=True) or type_tag("field_observation")}</div>')
         fc = st.columns(min(len(here), 3))
         for i, r in enumerate(here.itertuples()):
             with fc[i % len(fc)]:
@@ -267,6 +274,14 @@ if len(here):
                                    f'target="_blank">{E(kind_)} photo · field {E(str(fid))} · {E(str(when))}</a></div>')
             if not shown:
                 st.caption("Photos open in KoboToolbox (add KOBO_TOKEN to the app secrets to show them here).")
+
+else:
+    kb = kobo_button("Send the first field report from here", small=True)
+    if kb:
+        html_block(f'<div class="fp-zban" style="background:#F3EEF8;border:1px solid #DCCFEA;color:#3B2A55">'
+                   f'<div class="ic" style="background:#6A4C93;color:#fff">{icon("camera", 20)}</div><div style="flex:1">'
+                   f'<b>No ground evidence here yet.</b> Field photos and observations make this picture stronger.</div>'
+                   f'{kb}</div>')
 
 # ---------------------------------------------------------------- details, one click away
 with st.expander("Full interpretation and next steps"):

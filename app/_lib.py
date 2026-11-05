@@ -699,7 +699,9 @@ def footer():
             f'<div class="fp-foot-tag">Understanding conditions. Supporting better decisions.</div>'
             f'<div style="color:#CFE0D3;font-size:.82rem">Zambia · maize first · pilots: '
             f'{E(", ".join(_cfg(p)["pilot_short"] for p in PILOTS))}<br>Data: CHIRPS · NASA POWER · Sentinel-2 · '
-            f'SMAP · ERA5-Land · geoBoundaries · KoboToolbox</div></div>')
+            f'SMAP · ERA5-Land · geoBoundaries · KoboToolbox</div>'
+            + (f'<div style="margin-top:8px">{kobo_button("Field report form (KoboToolbox)", small=True)}</div>'
+               if kobo_form_url() else "") + '</div>')
 
 
 CSS_V2 = """
@@ -949,16 +951,61 @@ LAYERS["zones"] = {"label": "Agricultural zones", "short": "Zones", "ind": "agro
                    "labels": {k: f"{ZONES[k]['name']}: {ZONES[k]['rain']}" for k in ZONES},
                    "what": "Agro-ecological regions. Until the official map is loaded they are approximated from "
                            "rainfall: Region I below 800 mm a year, II 800 to 1,000 mm, III above 1,000 mm."}
-LAYERS = {k: LAYERS[k] for k in ["rainfall", "water", "temperature", "vegetation", "zones", "maize", "solar"]}
+OVERALL = ["Possible moisture stress", "Watch", "No major concern", "Not enough data"]
+for _k, (_lab, _col) in LEVELS.items():
+    CLASS_COLORS.setdefault(_lab, _col)
+LAYERS["overall"] = {"label": "Overall assessment", "short": "Overall", "ind": "_overall", "icon": "gauge",
+                     "classes": OVERALL[:3],
+                     "what": "All layers read together (rain, soil moisture, vegetation, temperature): the platform's "
+                             "assessment of each district."}
+LAYERS = {k: LAYERS[k] for k in ["overall", "water", "vegetation", "rainfall", "temperature", "zones", "maize", "solar"]}
+HOME_LAYERS = ["overall", "water", "vegetation", "rainfall", "temperature", "solar"]
 ICONS["sun"] = ('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2'
                 'M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>')
 ICONS["thermo"] = '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0Z"/><path d="M12 9v7"/>'
 
 
+_LEVEL_CACHE = {}
+
+
+def district_levels(nd):
+    """{district_id: interpretation} for every district (all layers together), computed once per data build."""
+    k = (str(nd.report.get("built_at")), len(nd.indicators) if nd.available else 0)
+    if k not in _LEVEL_CACHE:
+        out = {}
+        if nd.available:
+            for d in nd.districts.itertuples():
+                out[d.district_id] = interpret(d.district, location_records(nd, d.district_id), NCFG["classes"])
+        _LEVEL_CACHE.clear()
+        _LEVEL_CACHE[k] = out
+    return _LEVEL_CACHE[k]
+
+
+def layer_table(nd, key):
+    """Indicator rows behind a map layer; the overall layer is built from the interpretation of each district."""
+    if not nd.available:
+        return pd.DataFrame()
+    if key != "overall":
+        return nd.indicators[nd.indicators["indicator"] == LAYERS[key]["ind"]]
+    D = nd.districts.set_index("district_id")
+    rows = []
+    for did, it in district_levels(nd).items():
+        lab = LEVELS[it["level"]][0]
+        rows.append({"location_id": did, "location_name": D.loc[did, "district"], "province": D.loc[did, "province"],
+                     "status": "ok" if it["level"] != "unknown" else "pending", "class": lab,
+                     "value": {"concern": 0, "watch": 1, "normal": 2}.get(it["level"], 3),
+                     "display": lab if it["level"] == "normal" else f"{lab}: {it['short']}".replace(
+                         "Watch: Early sign: ", "Watch: "),
+                     "data_type": "derived", "confidence": "Medium", "source": "FieldPriority, all layers together",
+                     "source_url": "", "period_label": period_of(nd), "resolution": "District", "coverage": "District",
+                     "baseline": "", "quality_note": "", "method": "Rules in src/fieldpriority/national/interpret.py"})
+    return pd.DataFrame(rows)
+
+
 def layer_values(nd, key):
     """district_id -> (color, display text, class/value). Pending districts are grey."""
     L = LAYERS[key]
-    t = nd.indicators[nd.indicators["indicator"] == L["ind"]] if nd.available else pd.DataFrame()
+    t = layer_table(nd, key)
     out = {}
     vals = pd.to_numeric(t[t["status"] == "ok"]["value"], errors="coerce").dropna() if len(t) else pd.Series(dtype=float)
     q = list(np.quantile(vals, [0.2, 0.4, 0.6, 0.8])) if key == "solar" and len(vals) else []
@@ -978,7 +1025,7 @@ def layer_values(nd, key):
 
 
 def layer_available(nd, key):
-    t = nd.indicators[nd.indicators["indicator"] == LAYERS[key]["ind"]] if nd.available else pd.DataFrame()
+    t = layer_table(nd, key)
     return bool(len(t) and (t["status"] == "ok").any())
 
 
@@ -1495,46 +1542,76 @@ def signal_list_html(recs, fields=None):
 
 
 def national_answers(nd, fields):
-    """Zambia as a whole: (what, what_sub, why, why_sub, next list, colour) from live data only."""
-    I = nd.indicators if nd.available else pd.DataFrame(columns=["indicator", "status", "value", "class", "location_id"])
-    ok = lambda ind: I[(I["indicator"] == ind) & (I["status"] == "ok")]
-    rain, ws, mz = ok("rainfall_anomaly_pct"), ok("water_stress"), ok("maize_share_pct")
-    if not len(rain):
+    """Zambia as a whole, all layers together: (what, what_sub, why, why_sub, next list, colour). Live data only."""
+    if not nd.available:
         return ("District layers not built yet", "Run the monthly update.", "–", "", ["Run monthly_update.bat"], "#7A8590")
-    med = float(pd.to_numeric(rain["value"], errors="coerce").median())
-    dry = rain[rain["class"].isin(["Very dry", "Drier than normal"])]
-    wet = rain[rain["class"] == "Wetter than normal"]
-    stress = ws[ws["class"].isin(["Likely water stress", "Possible water stress", "Early sign: rainfall deficit"])]
+    I = nd.indicators
+    ok = lambda ind: I[(I["indicator"] == ind) & (I["status"] == "ok")]
+    lv = district_levels(nd)
     names = nd.districts.set_index("district_id")["district"]
-    if len(dry) > len(rain) / 3:
-        what, colr = f"Drier than normal in {len(dry)} of {len(rain)} districts", "#B9342B"
-    elif len(wet) > len(rain) / 3:
-        what, colr = "A wetter-than-normal season in much of Zambia", "#2E8B57"
+    flag = [d for d, it in lv.items() if it["level"] in ("concern", "watch")]
+    conc = [d for d in flag if lv[d]["level"] == "concern"]
+    n = len([1 for it in lv.values() if it["level"] != "unknown"])
+    if not flag:
+        what, colr = "Good growing conditions across Zambia", "#2E8B57"
+    elif len(conc) > n / 4:
+        what, colr = f"Moisture stress building in {len(conc)} districts", "#B9342B"
     else:
-        what, colr = "A near-normal season in most districts", "#2E8B57"
-    sub = f"Median rainfall {med:+.0f}% vs normal ({period_of(nd)})."
-    if len(stress):
-        sub += (f" {len(stress)} district(s) with signs of water stress: "
-                + ", ".join(names.get(d, d) for d in stress["location_id"][:4]) + ".")
+        what, colr = f"Mostly good conditions; {len(flag)} district{'s' if len(flag) > 1 else ''} to watch", "#C8870F"
+    parts = []
+    rain = ok("rainfall_anomaly_pct")
+    if len(rain):
+        parts.append(f"rain {float(pd.to_numeric(rain['value'], errors='coerce').median()):+.0f}%")
+    for ind, lab in (("vegetation_anomaly_pct", "vegetation"), ("soil_moisture_anomaly_pct", "soil moisture")):
+        t = ok(ind)
+        if len(t):
+            b = int(t["class"].isin(["Below normal", "Well below normal"]).sum())
+            parts.append(f"{lab} below normal in {b} of {len(t)}")
+    tmp = ok("temperature_deviation")
+    if len(tmp):
+        parts.append(f"temperature above normal in "
+                     f"{int(tmp['class'].isin(['Warmer than normal', 'Much warmer than normal']).sum())} of {len(tmp)}")
+    nf = len(fields)
+    if nf:
+        parts.append(f"{int(fields['visits'].sum())} field visit(s)")
+    sub = ("; ".join(parts) + ".")[:1].upper() + ("; ".join(parts) + ".")[1:]
+    if flag:
+        sub += " To watch: " + ", ".join(names.get(d, d) for d in (conc + [d for d in flag if d not in conc])[:4]) + "."
+    mz = ok("maize_share_pct")
     mzd = set(mz[pd.to_numeric(mz["value"], errors="coerce") >= NCFG["classes"]["maize_share_pct"]]["location_id"])
-    hit = sorted(set(stress["location_id"]) & mzd)
+    hit = sorted(set(flag) & mzd)
     if mzd:
-        why = (f"{len(hit)} of {len(mzd)} maize-growing districts show stress." if hit else
-               f"None of the {len(mzd)} maize-growing districts shows water stress.")
+        why = (f"{len(hit)} of {len(mzd)} maize-growing districts show signs of stress." if hit else
+               f"None of the {len(mzd)} maize-growing districts shows signs of stress.")
     else:
-        why = f"{len(stress)} district(s) show water stress."
+        why = f"{len(flag)} district(s) show signs of stress."
     why_sub = "Maize is Zambia's staple: stress in maize areas affects food security and income."
-    nxt = []
-    if len(stress):
-        nxt.append(f"Check the {len(stress)} district(s) to watch")
+    nxt = [f"Check the {len(flag)} district{'s' if len(flag) > 1 else ''} to watch"] if flag else []
     spec, S, _, _ = zmd_seasonal()
     if spec is not None and len(S):
         d = S[S["period"] == "DJF"]
         nb = int((d["rank"] <= 2).sum())
         if nb > len(d) / 2:
             nxt.append(f"Prepare for a drier Dec–Feb: ZMD expects it in {nb} districts")
-    nxt.append("Open any district for its full picture")
+    nxt.append("Send field reports from the ground (KoboToolbox)" if kobo_form_url() else
+               "Open any district for its full picture")
     return what, sub, why, why_sub, nxt, colr
+
+
+def kobo_form_url():
+    """Public link of the KoboToolbox field form (config/settings.yaml kobo: form_url), or ''."""
+    try:
+        return str((CFG.get("kobo") or {}).get("form_url") or "").strip()
+    except Exception:
+        return ""
+
+
+def kobo_button(label="Submit a field report", small=False):
+    u = kobo_form_url()
+    if not u:
+        return ""
+    return (f'<a class="fp-kobo{" s" if small else ""}" href="{E(u)}" target="_blank" rel="noopener">'
+            f'{icon("camera", 16 if small else 18)} {E(label)} ↗</a>')
 
 
 CSS_V5 = """
@@ -1561,6 +1638,10 @@ CSS_V5 = """
 .fp-vchain .r i{width:8px;height:8px;border-radius:50%;flex:none}
 .fp-vchain .r b{margin-left:auto;font-weight:700}
 .fp-spot h3{margin:0;font-size:1.3rem}
+.fp-kobo{display:inline-flex;align-items:center;gap:7px;background:#6A4C93;color:#fff !important;text-decoration:none !important;
+  padding:9px 16px;border-radius:12px;font:600 .92rem var(--fb)}
+.fp-kobo:hover{background:#563C7A}
+.fp-kobo.s{padding:5px 11px;border-radius:9px;font-size:.82rem}
 @media (max-width: 900px){ .fp-hero2{grid-template-columns:1fr} .fp-hero2 .ph{min-height:220px} }
 @media (max-width: 640px){ .fp-hero2 .tx{padding:22px 20px} .fp-hero2 h1{font-size:1.55rem} .fp-hero2 p{font-size:.92rem}
   .fp-loc h1{font-size:1.5rem} .fp-loc .lvl{margin-left:0} }

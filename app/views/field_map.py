@@ -1,12 +1,13 @@
 import pandas as pd
 import streamlit as st
-from _lib import (get_data, page_title, build_map, show_map, badge, legend_html, field_location, status_by_field,
+from _lib import (kobo_button, get_data, page_title, build_map, show_map, badge, legend_html, field_location, status_by_field,
                   period_text, html_block, sort_by_risk, VIEWS, RISK, RISK_ORDER, E, empty, src_tag)
 
 data = get_data()
 A = data.assessments
 page_title("Field Map", "The pilot maize fields, coloured by drought-risk class.",
            eyebrow="Geographical overview", icon_name="pin")
+html_block(kobo_button("Submit a field report (KoboToolbox)"))
 
 status = status_by_field(data)
 locs = {f: field_location(data, f) for f in A["field_id"]}

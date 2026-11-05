@@ -1,6 +1,6 @@
 import pandas as pd
 import streamlit as st
-from _lib import (page_title, html_block, national, monitored_fields, build_zambia_map, show_map, layer_available,
+from _lib import (layer_table, page_title, html_block, national, monitored_fields, build_zambia_map, show_map, layer_available,
                   period_of, type_tag, conf_tag, evidence_line, icon, empty, LAYERS, E)
 
 nd = national()
@@ -10,8 +10,8 @@ page_title("Zambia Map", "Where conditions are changing. Click a district for it
 
 with st.container(border=True):
     c1, c2, c3 = st.columns([3.2, 1.3, 1])
-    key = c1.segmented_control("Indicator layer", list(LAYERS), default="rainfall", key="map_layer", width="stretch",
-                               format_func=lambda k: LAYERS[k]["short"] + ("" if layer_available(nd, k) else " (soon)")) or "rainfall"
+    key = c1.segmented_control("Indicator layer", list(LAYERS), default="overall", key="map_layer", width="stretch",
+                               format_func=lambda k: LAYERS[k]["short"] + ("" if layer_available(nd, k) else " (soon)")) or "overall"
     prov = c2.selectbox("Province", ["All provinces"] + sorted(nd.districts["province"].unique()))
     show_f = c3.toggle("Fields and visits", value=True)
 
@@ -29,7 +29,7 @@ with right:
     html_block(f'<div class="fp-card"><h4>{icon(L["icon"], 18, "#1F4D3A")} {E(L["label"])}</h4>'
                f'<div class="fp-sub" style="margin:.3rem 0">{E(L["what"])}</div>'
                f'<div class="fp-sub">Period: <b>{E(period_of(nd) if key != "solar" else str(nd.report.get("solar_year", "")))}</b></div></div>')
-    t = nd.indicators[nd.indicators["indicator"] == L["ind"]].copy() if nd.available else pd.DataFrame()
+    t = layer_table(nd, key).copy()
     if prov != "All provinces" and len(t):
         t = t[t["province"] == prov]
     if t.empty or not layer_available(nd, key):
