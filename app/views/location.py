@@ -190,10 +190,10 @@ with v2:
                 x=alt.X("Month:O", sort=order, title=None, axis=alt.Axis(labelAngle=0)),
                 y=alt.Y("This season:Q", title="Rainfall (mm)"),
                 tooltip=["Month", alt.Tooltip("This season:Q", format=".0f"), alt.Tooltip("Normal:Q", format=".0f")])
-            n = alt.Chart(rain_m).mark_tick(color="#1E2A24", thickness=3, size=30).encode(
+            n = alt.Chart(rain_m).mark_tick(color="#E8892B", thickness=3, size=34).encode(
                 x=alt.X("Month:O", sort=order), y="Normal:Q")
             st.altair_chart(_style((b + n).properties(height=290)), width="stretch")
-            st.caption("Bars: this season. Black marks: normal.")
+            st.caption("Bars: this season. Orange marks: normal.")
     def line_tab(tab, var, ytitle, fmt, colour, pad):
         tm = month_table(var)
         with tab:
@@ -239,14 +239,14 @@ with v2:
                     ch = alt.Chart(T).mark_line(color="#CFC6B2", strokeWidth=2).encode(x=x, y=y) + \
                         alt.Chart(T).mark_point(filled=True, size=110).encode(x=x, y=y, color=color, tooltip=tip)
                 mean = alt.Chart(pd.DataFrame({"y": [float(T[~T["current"]][var].mean())]})).mark_rule(
-                    color="#1E2A24", strokeDash=[4, 3]).encode(y="y:Q")
+                    color="#E8892B", strokeDash=[4, 3]).encode(y="y:Q")
                 st.altair_chart(_style((ch + mean).properties(height=270)), width="stretch")
                 rank = T.sort_values(var).reset_index(drop=True)
                 if rank["current"].any():
                     pos = int(rank.index[rank["current"]][0]) + 1
                     st.caption(f"Same months each season. This season ranks {pos} of {len(T)} from "
                                + ("driest to wettest" if var == "rainfall_mm" else "coolest to warmest")
-                               + ". Dashed line: normal.")
+                               + ". Orange dashed line: normal.")
 
 # ---------------------------------------------------------------- 4. crop evidence (only where fields exist)
 if len(here):

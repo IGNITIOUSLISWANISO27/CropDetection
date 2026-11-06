@@ -1075,20 +1075,32 @@ def build_zambia_map(nd, key, fields=None, focus=None, show_fields=True, height=
                        style_function=lambda f: {"fillColor": f["properties"]["color"], "color": "#8B6B4A",
                                                  "weight": 0.6, "fillOpacity": 0.85},
                        tooltip=folium.GeoJsonTooltip(["label"], labels=False)).add_to(m)
-    fc = _json.loads(g[["district_id", "district", "province", "value", "color", "pop", "geometry"]].to_json())
+    focus = [focus] if isinstance(focus, str) else (list(focus) if focus is not None else None)
+    g["sel"] = g["district_id"].isin(focus) if focus is not None else True
+    fc = _json.loads(g[["district_id", "district", "province", "value", "color", "pop", "sel", "geometry"]].to_json())
+
+    def _style(f):
+        if zone_mode:
+            return {"fillOpacity": 0.0, "color": "#1F4D3A", "weight": 0.7}
+        if focus is None:
+            return {"fillColor": f["properties"]["color"], "color": "#FFFFFF", "weight": 0.8, "fillOpacity": 0.82}
+        # report map: colour only the selected area, see-through, so the land underneath stays visible
+        if f["properties"]["sel"]:
+            return {"fillColor": f["properties"]["color"], "color": "#FFFFFF", "weight": 0.6, "fillOpacity": 0.45}
+        return {"fillOpacity": 0.0, "color": "#FFFFFF", "weight": 0.8, "opacity": 0.7}
+
     gj = folium.GeoJson(
-        fc, name="Districts" if zone_mode else LAYERS[key]["label"],
-        style_function=(lambda f: {"fillOpacity": 0.0, "color": "#1F4D3A", "weight": 0.7}) if zone_mode else
-        (lambda f: {"fillColor": f["properties"]["color"], "color": "#FFFFFF", "weight": 0.8, "fillOpacity": 0.82}),
+        fc, name="Districts" if zone_mode else LAYERS[key]["label"], style_function=_style,
         highlight_function=lambda f: {"weight": 2.5, "color": "#1F4D3A", "fillOpacity": 0.9},
         tooltip=folium.GeoJsonTooltip(["district", "value"], aliases=["District", LAYERS[key]["label"]], sticky=True),
         popup=folium.GeoJsonPopup(["pop"], labels=False))
     gj.add_to(m)
-    focus = [focus] if isinstance(focus, str) else (list(focus) if focus is not None else None)
-    if focus is not None:
-        fg = g[g["district_id"].isin(focus)].dissolve()
-        folium.GeoJson(_json.loads(fg[["geometry"]].to_json()), name="Selected district",
-                       style_function=lambda f: {"fill": False, "color": "#14233A", "weight": 3}).add_to(m)
+    if focus is not None:       # outline readable on both the light map and satellite: white halo, gold line
+        fg = _json.loads(g[g["district_id"].isin(focus)].dissolve()[["geometry"]].to_json())
+        folium.GeoJson(fg, name="Selected area (halo)", control=False,
+                       style_function=lambda f: {"fill": False, "color": "#FFFFFF", "weight": 6, "opacity": 0.9}).add_to(m)
+        folium.GeoJson(fg, name="Selected area", control=False,
+                       style_function=lambda f: {"fill": False, "color": "#D9A21B", "weight": 3}).add_to(m)
     if show_fields and fields is not None and len(fields):
         grp = folium.FeatureGroup(name="Monitored fields (risk class)", show=True)
         obs = folium.FeatureGroup(name="Field observations (KoboToolbox)", show=True)

@@ -5,7 +5,7 @@ drought has damaged crops. Thresholds come from config/national.yaml (classes).
 """
 CLASS_COLORS = {
     # rainfall
-    "Very dry": "#8C3B1E", "Drier than normal": "#D08C3A", "Near normal": "#E9E4D4", "Wetter than normal": "#3E7FB0",
+    "Very dry": "#8C3B1E", "Drier than normal": "#D08C3A", "Near normal": "#C9BC94", "Wetter than normal": "#3E7FB0",
     # temperature
     "Much warmer than normal": "#B9342B", "Warmer than normal": "#E7894F", "Cooler than normal": "#5E8FC0",
     # vegetation / soil moisture
