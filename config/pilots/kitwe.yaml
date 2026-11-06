@@ -1,0 +1,36 @@
+# Kitwe pilot (Copperbelt Province): one small maize plot at Miseshi, added 6 Nov 2026 from the Earth Engine
+# package "Miseshi_Agricultural_Monitoring" (boundary miseshi_aoi.shp, 0.038 ha). Only what differs from
+# config/settings.yaml (Solwezi) is listed here. Monthly field data (Sentinel-2, CHIRPS, ERA5-Land) is downloaded
+# by monthly_update.bat, like Solwezi.
+pilot_short: Kitwe
+pilot_area: "Kitwe pilot (Miseshi), Copperbelt Province, Zambia"
+pilot_district: Kitwe
+model_version: "0.3.0-solwezi"
+year: 2026
+months: [1, 2, 3, 4]
+period_label: "2026-01..2026-04"
+
+paths:
+  data_dir: data/kitwe
+  fields_shapefile: miseshi_aoi.shp
+  output_dir: outputs/kitwe
+
+alerts:
+  id_prefix: "FP-KTW"
+
+rules:
+  field_info: data/kitwe/field_info.csv
+
+firebase:
+  collection_prefix: kitwe_
+
+tables:
+  soil_moisture_layer: surface        # the Miseshi package has SMAP surface soil moisture (20 km area), 2025 only
+
+sources:
+  soil_moisture: "SMAP surface soil moisture, 20 km area around the field (quality-filtered), monthly"
+  soil_moisture_baseline: "Same month of earlier years in soil_moisture_monthly.csv (2025 only so far)"
+  s1_vv: "Sentinel-1 VV backscatter (dB), 10 m, Miseshi package 2025"
+
+monitoring:
+  auto_update: true
