@@ -3,11 +3,12 @@ import json
 
 import pandas as pd
 import streamlit as st
-from _lib import (html_block, icon, footer, national, monitored_fields, layer_available, page_title, ROOT, E)
+from _lib import (html_block, icon, footer, national, monitored_fields, layer_available, page_title, field_to_intel_html,
+                  type_tag, kobo_button, STATUS, ROOT, E)
 
 nd = national()
 F = monitored_fields(nd)
-page_title("About the platform", "Purpose, data, method and accuracy.", eyebrow="FieldPriority", icon_name="doc")
+page_title("About / Methodology", "Purpose, evidence, method and accuracy.", eyebrow="FieldPriority", icon_name="doc")
 
 caps = ["Geospatial agricultural monitoring", "Crop and vegetation condition assessment",
         "Rainfall and temperature analysis", "Water stress monitoring", "Ground-based observation and verification",
@@ -27,8 +28,9 @@ with tab0:
                '<div class="s">Rainfall maps, vegetation indices and weather bulletins each answer one question; the '
                'user has to combine them.</div></div>'
                '<div class="q"><div class="k">FieldPriority connects them</div><div class="a">One answer per location'
-               '</div><div class="s">Weather → soil water → crop response → options, read together for a district, '
-               'zone, province or field: what is happening, why it matters, what next.</div></div>'
+               '</div><div class="s">Field and satellite crop evidence, rainfall, temperature and water stress read together '
+               'for a district, zone, province or field: what is happening, why it matters, what to consider next.'
+               '</div></div>'
                '<div class="q"><div class="k">And checks itself</div><div class="a">Evidence and verification</div>'
                '<div class="s">Every value carries its source, date and confidence; alerts are verified in the field '
                'and the 2023/24 drought was replayed to test it.</div></div></div>')
@@ -41,12 +43,12 @@ with tab1:
         "Temperature": ("thermo", "NASA POWER (districts), ERA5-Land (fields)", layer_available(nd, "temperature")),
         "Water stress": ("drop", "SMAP soil moisture + rainfall rules", sm_ok or layer_available(nd, "water")),
         "Local observations": ("camera", "KoboToolbox field visits and photos", len(F) > 0),
-        "Solar potential": ("sun", "NASA POWER solar radiation", layer_available(nd, "solar")),
     }
     html_block('<div class="fp-layers">' + "".join(
         f'<div class="fp-layer"><div class="h">{icon(ic, 18, "#1F4D3A")}{E(t)}</div><div class="s">{E(s)}</div>'
         f'<span class="st" style="background:{"#E6F0E9" if ok else "#EEE"};color:{"#1F4D3A" if ok else "#5E6B63"}">'
         f'{"Live" if ok else "Not yet available"}</span></div>' for t, (ic, s, ok) in status.items()) + '</div>')
+    html_block(field_to_intel_html())
     html_block('<div class="fp-flow"><div class="b"><b>Location-based intelligence</b>A district, zone, province or '
                'field, with every layer</div><div class="a">→</div><div class="b"><b>Integrated analysis</b>Indicators '
                'connected and explained together</div><div class="a">→</div><div class="b"><b>Practical intelligence'
@@ -55,13 +57,29 @@ with tab1:
                'affect maize production, household food security and income. Earlier, location-specific information '
                'helps farmers, extension officers and planners respond before losses happen.</div>')
 with tab2:
+    html_block('<div class="fp-panel-h"><span>Condition status</span></div><div style="display:flex;gap:8px;'
+               'flex-wrap:wrap;margin-bottom:.6rem">' + "".join(
+                   f'<span class="fp-zc" style="background:{c};color:#fff">{E(l)}</span>' for l, c in STATUS.values())
+               + '</div>')
+    st.markdown("""
+- **Stable**: crop greenness, soil water and rainfall close to or better than normal.
+- **Watch**: an early moisture signal (for example soil drying) while the crop is still green.
+- **Attention**: moisture stress in more than one signal.
+- **Priority**: the crop itself is reacting (greenness below normal) or several signals agree on water stress:
+  first in line for field checks.
+- **Insufficient evidence**: not enough layers in this period to make a defensible call.
+""")
+    html_block('<div class="fp-panel-h" style="margin-top:.6rem"><span>Kinds of evidence</span></div><div style="display:'
+               'flex;gap:6px;flex-wrap:wrap;margin-bottom:.4rem">' + " ".join(type_tag(t) for t in (
+                   "field_observation", "satellite_estimate", "model_output", "derived", "official")) + '</div>')
     st.markdown("""
 - **Every number is an indicator record** with its source, period, resolution, coverage, kind of data (measured,
   satellite estimate, model estimate, field observation, derived, official ZMD) and confidence. Hover over a value to
   see it; each location report has the full evidence register.
 - **Normal** = the same months of the 10 previous seasons. Districts are compared with their own normal.
-- **Cautious interpretation**: moisture signals (rainfall, soil moisture, vegetation) set the level; warmth only adds
-  to a moisture signal. The platform says *possible stress, check in the field*, never *crop damage*.
+- **Cautious interpretation**: moisture signals (crop greenness, soil moisture, rainfall) set the status; warmth only
+  adds to a moisture signal. The platform offers *considerations* (for example, a field check), never commands; it
+  supports decisions, it does not make them.
 - **Field level** (pilots): Sentinel-2 greenness at 10 m with drought-stress rules; alerts are verified by field
   visits through KoboToolbox, which give the field-level accuracy.
 - **Official weather information** comes unchanged from the Zambia Meteorological Department.

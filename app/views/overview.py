@@ -1,23 +1,27 @@
-"""Overview: understood in 15 seconds. Zambia this season (three answers), the map, one location spotlight showing
-how the layers connect, then the key indicators. Everything else is one click away."""
+"""Overview: understood in 10 seconds. What the platform is (hero), Zambia this season (three answers), the map with
+the condition of every district, a spotlight location, the field-to-intelligence pathway and the key signals."""
 import streamlit as st
 from _lib import (html_block, icon, footer, national, monitored_fields, national_summary, intel_summary_html,
                   zmd_banner, zmd_alerts, build_zambia_map, show_map, layer_available, location_records, link,
-                  hero_photo_html, answer_cards_html, kobo_button, national_answers, signal_list_html, HOME_LAYERS, LAYERS, LEVELS, NCFG, E,
+                  hero_photo_html, answer_cards_html, kobo_button, national_answers, signal_list_html, field_to_intel_html,
+                  HOME_LAYERS, LAYERS, STATUS, NCFG, E,
                   interpret)
 
 nd = national()
 F = monitored_fields(nd)
 
 # ---------------------------------------------------------------- hero (photo)
+DEMO = "kitwe" if "kitwe" in set(nd.districts["district_id"]) else None
 html_block(hero_photo_html(f"""
-  <span class="tag">{icon("pin", 14, "#F2C74E")} Zambia · Agricultural Intelligence</span>
-  <h1>Understanding agricultural conditions.<br><span class="gold">Supporting better decisions.</span></h1>
-  <p>Rainfall, temperature, water, crops and solar potential, connected for every district and field.</p>
-  <div class="chips"><span class="chip">MAIZE FIRST</span><span class="chip o">LOCATION-BASED</span></div>
-  <div><a class="fp-btn gold" href="{link('/location')}" target="_self">{icon("pin", 18)} Open a location</a>
-  <a class="fp-btn ghost" href="{link('/map')}" target="_self">{icon("layers", 18)} Explore the map</a></div>
-  <div style="margin-top:.8rem">{kobo_button("Report from the field (KoboToolbox)", small=True)}</div>"""))
+  <span class="tag">{icon("pin", 14, "#F2C74E")} Zambia · maize-growing areas</span>
+  <h1>Zambia Agricultural Intelligence</h1>
+  <p style="font-size:1.15rem;color:#fff">Understand what is happening in agricultural areas.</p>
+  <div class="fp-flow4"><span>LOCATION</span><i>→</i><span>EVIDENCE</span><i>→</i><span>CONDITIONS</span><i>→</i>
+  <span>INTELLIGENCE</span></div>
+  <div><a class="fp-btn gold" href="{link('/location', district=DEMO) if DEMO else link('/location')}" target="_self">
+  {icon("pin", 18)} Explore a location</a>
+  <a class="fp-btn ghost" href="{link('/map')}" target="_self">{icon("layers", 18)} Zambia map</a></div>
+  <div style="margin-top:.8rem">{kobo_button(small=True)}</div>"""))
 
 # official warnings only when something is in force
 try:
@@ -42,7 +46,7 @@ with left:
                                    format_func=lambda k: LAYERS[k]["short"] + ("" if layer_available(nd, k) else " (soon)"),
                                    label_visibility="collapsed") or "overall"
         show_map(build_zambia_map(nd, key, F, height=560), height=560)
-        st.caption(LAYERS[key]["what"] + " Click a district for its full picture.")
+        st.caption(LAYERS[key]["what"] + " Click a district to open its intelligence summary.")
 
 with right:
     from fieldpriority.national.aggregate import zone_members
@@ -80,7 +84,8 @@ with right:
                 # signals closer to the crop weigh more: vegetation 3, soil moisture 2, rainfall 1, warmth 0.5
                 w = sum(3 if x.startswith("vegetation") else 2 if x.startswith("root-zone") else
                         1 if x.startswith("rainfall") else .5 for x in it["concern"])
-                ranked.append((0 if it["level"] == "concern" else 1, -w, d.district_id, d.district, rec, it))
+                ranked.append(({"priority": 0, "attention": 1}.get(it["status"], 2), -w, d.district_id, d.district,
+                               rec, it))
         ranked.sort(key=lambda x: (x[0], x[1], x[3]))
     if ranked:
         _, _, sid, sname, srec, sit = ranked[0]
@@ -93,7 +98,7 @@ with right:
         title = "Spotlight: pilot district"
     if nd.available:
         here = F[F["district_id"] == sid] if len(F) else F
-        lab, col = LEVELS[sit["level"]]
+        lab, col = STATUS[sit["status"]]
         with st.container(border=True):
             html_block(f'<div class="fp-spot"><div class="fp-mini" style="text-transform:uppercase;letter-spacing:.08em;'
                        f'font-weight:700">{E(title)}</div><div style="display:flex;justify-content:space-between;'
@@ -109,7 +114,8 @@ with right:
                     f'<a href="{link("/location", district=r[2])}" target="_self">{E(r[3])}</a>' for r in ranked[1:6])
                     + '</div>')
 
-# ---------------------------------------------------------------- key indicators (details on hover)
+# ---------------------------------------------------------------- field to intelligence + key signals
+html_block(field_to_intel_html())
 built = str(nd.report.get("built_at") or "")[:10]
 html_block(intel_summary_html(national_summary(nd, F), updated=f"updated {built}" if built else
                               "District layers not built yet"))

@@ -78,7 +78,6 @@ def interpret(name, recs, c, fields=None, monthly_rain=None, period_label=""):
     fields = fields or []
     rain, temp = _v(recs, "rainfall_anomaly_pct"), _v(recs, "temperature_deviation")
     veg, sm = _v(recs, "vegetation_anomaly_pct"), _v(recs, "soil_moisture_anomaly_pct")
-    solar = _v(recs, "solar_resource")
     ws = (recs.get("water_stress") or {}).get("class") or None
     rc, tc = rain_class(rain, c), temp_class(temp, c)
     vc, sc = below_class(veg, c["vegetation_pct"]), below_class(sm, c["soil_moisture_pct"])
@@ -174,33 +173,29 @@ def interpret(name, recs, c, fields=None, monthly_rain=None, period_label=""):
     stress = ws in ("Likely water stress", "Possible water stress")
     urgent = [f for f in flagged if f.get("risk_level") != "Watch"]
     if level in ("concern", "watch") and urgent:
-        cons.append("Prioritise verification visits to the flagged monitored fields (High and Moderate first).")
+        cons.append("Consider prioritising verification visits to the flagged monitored fields (High and Moderate first).")
     elif level in ("concern", "watch") and flagged:
-        cons.append("Keep monitoring the field(s) on Watch; plan a repeat visit if their greenness starts to fall.")
+        cons.append("Consider continued monitoring of the field(s) on Watch, with a repeat visit if greenness starts to fall.")
     elif level in ("concern", "watch") and fields:
-        cons.append("Plan field inspections of the monitored fields to check crop condition on the ground.")
+        cons.append("Consider field inspections of the monitored fields to check crop condition on the ground.")
     elif level in ("concern", "watch"):
-        cons.append("No monitored fields here yet: ask extension officers for field reports, or add pilot fields "
-                    "in maize-growing parts of the district.")
+        cons.append("Consider closer field verification: field observations from extension officers or farmers "
+                    "would confirm conditions on the ground.")
     if stress or ws == "Early sign: rainfall deficit":
-        cons.append("Investigate water access for farms: boreholes, dams and streams, and how much irrigation is "
+        cons.append("Consider water access for farms: boreholes, dams and streams, and how much irrigation is "
                     "used now.")
-        cons.append("Review water-management practices with agricultural extension officers (for example mulching, "
+        cons.append("Consider water-management practices with agricultural extension officers (for example mulching, "
                     "conservation agriculture, timely weeding).")
     if tc in ("Much warmer than normal", "Warmer than normal"):
-        cons.append("During field visits, look for heat stress around tasselling and silking.")
+        cons.append("Consider checking for heat stress around tasselling and silking during field visits.")
     if vc in ("Well below normal", "Below normal"):
-        cons.append("Check causes other than drought (fall armyworm, disease, nutrient shortage) during visits.")
-    if stress and solar is not None:
-        cons.append(f"Solar resource is about {solar:.1f} kWh per m² per day. Where a water source exists, "
-                    "solar-powered irrigation may be worth assessing; technical and economic suitability is not "
-                    "assessed by this platform.")
+        cons.append("Consider causes other than drought (fall armyworm, disease, nutrient shortage) during visits.")
     if level in ("normal",):
-        cons.append("Continue monthly monitoring; the current indicators do not call for action.")
+        cons.append("Continue routine monitoring; the current indicators do not point to a need for action.")
     if level == "unknown":
-        cons.append("Run the monthly update or import the Earth Engine district export to fill the missing layers.")
-    cons.append("Review any decision with agricultural extension officers: the platform supports local judgement, "
-                "it does not replace it.")
+        cons.append("Field observations would sharpen this picture: consider a visit with the field form.")
+    cons.append("Decisions rest with farmers and agricultural extension officers: the platform provides evidence "
+                "and decision support, not final decisions.")
     # short forms for the at-a-glance cards (the full sentences above stay in the details)
     why = []
     if level == "normal":
@@ -219,67 +214,78 @@ def interpret(name, recs, c, fields=None, monthly_rain=None, period_label=""):
         why.append("No specific effect on maize expected now." if have else "Cannot be judged without data.")
     nxt = []
     if level in ("concern", "watch"):
-        nxt.append("Visit the flagged fields first" if urgent else "Re-visit Watch fields if greenness falls"
-                   if flagged else "Inspect the monitored fields" if fields else
-                   "Ask extension officers for field reports")
+        nxt.append("Consider prioritising visits to the flagged fields" if urgent else
+                   "Consider a repeat visit if field greenness falls" if flagged else
+                   "Consider a field check to confirm crop condition" if fields else
+                   "Consider field observations to confirm conditions on the ground")
     if stress or ws == "Early sign: rainfall deficit":
-        nxt.append("Check water access: boreholes, dams, streams")
-        nxt.append("Review water management with extension officers")
+        nxt.append("Consider water access: boreholes, dams, streams")
+        nxt.append("Consider water management with extension officers")
     if tc in ("Much warmer than normal", "Warmer than normal") and level != "normal":
-        nxt.append("Look for heat stress at tasselling")
+        nxt.append("Watch for heat stress around tasselling")
     if vc in ("Well below normal", "Below normal"):
-        nxt.append("Rule out pests and disease (e.g. fall armyworm)")
-    if stress and solar is not None:
-        nxt.append(f"Assess solar-powered irrigation where water exists ({solar:.1f} kWh/m²/day)")
+        nxt.append("Consider other causes: pests, disease, nutrients")
     if level == "normal":
-        nxt.append("Keep monitoring monthly")
+        nxt.append("Continue routine monitoring")
     if level == "unknown":
-        nxt.append("Fill the missing data layers (monthly update)")
-    together = combined_story(rc, sc, vc, tc, flagged, fields, solar if stress else None, have)
-    short = {"concern": head, "normal": "Conditions close to or better than normal",
-             "unknown": head}.get(level) or "Early sign: " + moist[0].replace("root-zone soil moisture", "soil moisture")
-    return {"level": level, "headline": head, "short": short, "together": together, "paragraphs": paras, "maize": maize, "gaps": gaps,
+        nxt.append("Consider a field observation to establish conditions")
+    together = combined_story(rc, sc, vc, tc, flagged, fields, have)
+    short = {"concern": "Signs of crop moisture stress", "normal": "Crop and growing conditions stable",
+             "unknown": "Conditions still being established"}.get(level) or (
+        "Early sign: " + moist[0].replace("root-zone soil moisture", "soil moisture"))
+    # five-tier status shown to users; 'priority' = attention with the crop itself or several signals involved
+    vlow = vc in ("Well below normal", "Below normal")
+    status = {"normal": "stable", "watch": "watch", "unknown": "insufficient",
+              "concern": "priority" if (vlow or ws == "Likely water stress" or len(moist) >= 3) else "attention"}[level]
+    if status == "priority":
+        short = "Crop stress likely: priority for field checks"
+    # evidence strength (used discreetly): how many of the four layers and field evidence are present
+    n_layers = sum(x is not None for x in (rain, temp, veg, sm))
+    seen = any((f.get("visits") or 0) > 0 for f in (fields or []))
+    strength = ("Strong" if n_layers == 4 and seen else "Good" if n_layers >= 3 else "Partial" if n_layers else "Limited")
+    return {"level": level, "status": status, "evidence": strength, "headline": head, "short": short,
+            "together": together, "paragraphs": paras, "maize": maize, "gaps": gaps,
             "considerations": cons, "concern": concern, "why": why, "next": nxt, "classes": {"rainfall": rc, "temperature": tc,
                                                                    "vegetation": vc, "soil_moisture": sc,
                                                                    "water_stress": ws}}
 
 
-def combined_story(rc, sc, vc, tc, flagged, fields, solar, have):
-    """One or two plain sentences on what the layers mean TOGETHER (the platform's core idea)."""
+def combined_story(rc, sc, vc, tc, flagged, fields, have):
+    """One or two plain sentences on what the layers mean TOGETHER, crop first (the platform's core idea)."""
     if not have:
-        return "Not enough data yet to connect the layers."
+        return "Satellite and weather layers for this location are still being assembled."
     dry = rc in ("Very dry", "Drier than normal")
     wet = rc == "Wetter than normal"
     soil_low = sc in ("Well below normal", "Below normal")
     veg_low = vc in ("Well below normal", "Below normal")
     soil_known, veg_known = sc is not None, vc is not None
-    if dry and soil_low and veg_low:
-        t = "Less rain has dried the soil, and crop greenness has fallen: the crop is likely feeling it."
-    elif dry and soil_low:
-        t = ("Less rain has dried the soil, but crop greenness has not fallen yet: a window to act early."
-             if veg_known else "Less rain has dried the soil; crop greenness is not yet measured here.")
-    elif dry and soil_known:
-        t = "Rain is below normal, but soil water is holding up so far."
-    elif dry:
-        t = "Rain is below normal; soil water is not yet measured here."
-    elif soil_low:
-        t = ("Rain is " + ("above" if wet else "close to") + " normal, but the soil holds less water than usual"
-             + (", and crop greenness has fallen." if veg_low else "; the crop has not reacted yet." if veg_known else "."))
+    rain_txt = "below-normal rain" if dry else "above-normal rain" if wet else "near-normal rain"
+    if veg_low and soil_low:
+        t = f"Crop greenness has fallen and the soil is drier than usual after {rain_txt}: the crop is likely short of water."
     elif veg_low:
-        t = ("Crop greenness is below normal although water is not short: other causes (pests, disease, "
-             "nutrients) are more likely than drought.")
+        t = ("Crop greenness is below normal while water is not short: pests, disease or nutrients are more likely "
+             "causes than drought." if not dry else
+             "Crop greenness is below normal after below-normal rain.")
+    elif soil_low:
+        t = ("The crop is still green, but the soil holds less water than usual" + (" after below-normal rain" if dry else "")
+             + ": an early window to act." if veg_known else
+             "The soil holds less water than usual" + (" after below-normal rain." if dry else "."))
+    elif dry:
+        t = ("The crop and soil water are holding up, although rain is below normal." if (veg_known and soil_known)
+             else "Rain is below normal; crop and soil signals are not yet available here.")
     else:
-        t = ("Rain, soil water and crop greenness are all at or above normal." if soil_known and veg_known else
-             "Rain is " + ("above" if wet else "close to") + " normal.")
+        t = (f"The crop is green and soil water is adequate, with {rain_txt}." if (veg_known and soil_known) else
+             f"Growing conditions look normal, with {rain_txt}.")
     if tc in ("Much warmer than normal", "Warmer than normal"):
         t += " Warmer weather adds to crop water demand."
     if fields:
         t += (f" {len(flagged)} of {len(fields)} monitored field(s) flagged." if flagged else
-              f" No monitored field is flagged.")
-    if solar is not None:
-        t += f" Strong sun ({solar:.1f} kWh/m²/day) could power pumping where water exists."
+              " Monitored fields show no stress flag.")
     return t
 
 
-LEVELS = {"concern": ("Possible moisture stress", "#B9342B"), "watch": ("Watch", "#D9A21B"),
-          "normal": ("No major concern", "#2E8B57"), "unknown": ("Not enough data", "#7A8590")}
+LEVELS = {"concern": ("Attention", "#E07B24"), "watch": ("Watch", "#D9A21B"),
+          "normal": ("Stable", "#2E8B57"), "unknown": ("Insufficient evidence", "#8A948E")}
+# what users see: five tiers (interpret()["status"]); 'level' above stays the rule outcome used by tests and replays
+STATUS = {"stable": ("Stable", "#2E8B57"), "watch": ("Watch", "#D9A21B"), "attention": ("Attention", "#E07B24"),
+          "priority": ("Priority", "#B9342B"), "insufficient": ("Insufficient evidence", "#8A948E")}

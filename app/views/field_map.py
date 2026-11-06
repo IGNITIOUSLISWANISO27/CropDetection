@@ -7,7 +7,7 @@ data = get_data()
 A = data.assessments
 page_title("Field Map", "The pilot maize fields, coloured by drought-risk class.",
            eyebrow="Geographical overview", icon_name="pin")
-html_block(kobo_button("Submit a field report (KoboToolbox)"))
+html_block(kobo_button())
 
 status = status_by_field(data)
 locs = {f: field_location(data, f) for f in A["field_id"]}

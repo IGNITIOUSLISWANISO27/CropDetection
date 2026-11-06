@@ -46,7 +46,7 @@ display:grid;place-items:center;color:#1F4D3A">{icon("leaf", 32, "#1F4D3A", 2.2)
         except Exception as e:
             st.caption(f"PDF unavailable: {e}")
 
-    # ---- link to the district's location report (rainfall, temperature, water stress, solar)
+    # ---- link to the district's location report (crop, rainfall, temperature, water stress)
     try:
         from _lib import national
         nd = national()
@@ -199,7 +199,7 @@ if qp_field and qp_field in set(A["field_id"]):
 # ================================================================ list of assessments
 page_title("Assessments", "Each field's risk class, verification and visits. Open a field for its profile.",
            eyebrow="Field assessment records", icon_name="clipboard")
-html_block(kobo_button("Submit a field report (KoboToolbox)"))
+html_block(kobo_button())
 
 stat = A["field_id"].map(status)
 verified = int(stat.str.startswith("Verified").sum())

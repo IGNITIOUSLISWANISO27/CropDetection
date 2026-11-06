@@ -698,8 +698,8 @@ def footer():
             f'<div style="color:#CFE0D3;font-size:.8rem">Agricultural &amp; Environmental Intelligence</div></div></div>'
             f'<div class="fp-foot-tag">Understanding conditions. Supporting better decisions.</div>'
             f'<div style="color:#CFE0D3;font-size:.82rem">Zambia · maize first · all 116 districts<br>Data: ZMD · '
-            f'CHIRPS · NASA POWER · MODIS · SMAP · ESA WorldCereal · Sentinel-2 · geoBoundaries · KoboToolbox</div>'
-            + (f'<div style="margin-top:8px">{kobo_button("Field report form (KoboToolbox)", small=True)}</div>'
+            f'CHIRPS · NASA POWER · MODIS · ERA5-Land · ESA WorldCereal · Sentinel-2 · geoBoundaries · KoboToolbox</div>'
+            + (f'<div style="margin-top:8px">{kobo_button("Submit Field Observation", small=True)}</div>'
                if kobo_form_url() else "") + '</div>')
 
 
@@ -801,7 +801,7 @@ def kobo_photo(url):
 # ================================================================ Zambia intelligence (district layers, all pilots)
 from fieldpriority.evidence import DATA_TYPES                       # noqa: E402
 from fieldpriority.national import load_national_config, MON as NMON  # noqa: E402
-from fieldpriority.national.interpret import (CLASS_COLORS, LEVELS, STRESS_ORDER, interpret)  # noqa: E402
+from fieldpriority.national.interpret import (CLASS_COLORS, LEVELS, STATUS, STRESS_ORDER, interpret)  # noqa: E402
 
 NCFG = load_national_config()
 
@@ -856,7 +856,11 @@ def monitored_fields(nd=None):
                      "Soil" if a.get("media_file_basename") == x.get("soil_photo") else "Photo", x.get("visit_date"), a)
                     for x in (mine.to_dict("records") if len(mine) else []) for a in attachments(x)]
             photos = len(pics)
-            rows.append({"pilot": p, "pilot_short": _cfg(p)["pilot_short"], "field_id": fid, "lat": pt.y,
+            last = (mine.sort_values("visit_date").iloc[-1].to_dict() if len(mine) and "visit_date" in mine else {})
+            crop = str(geo.loc[fid].get("crop") or "").strip() if "crop" in geo.columns else ""
+            rows.append({"crop": (crop or _cfg(p).get("crop", "maize") or "maize").title(),
+                         "last_visit": last.get("visit_date"), "last_stage": last.get("maize_stage"),
+                         "last_verdict": last.get("field_verdict"), "last_cause": last.get("main_cause"),"pilot": p, "pilot_short": _cfg(p)["pilot_short"], "field_id": fid, "lat": pt.y,
                          "lon": pt.x, "risk_level": r["risk_level"], "outcome": r["outcome"],
                          "data_confidence": r["data_confidence"], "verification": stat.get(fid, "Not yet verified"),
                          "visits": len(mine), "approved": approved, "photos": photos, "pics": pics, "period": r.get("period"),
@@ -950,15 +954,16 @@ LAYERS["zones"] = {"label": "Agricultural zones", "short": "Zones", "ind": "agro
                    "labels": {k: f"{ZONES[k]['name']}: {ZONES[k]['rain']}" for k in ZONES},
                    "what": "Agro-ecological regions. Until the official map is loaded they are approximated from "
                            "rainfall: Region I below 800 mm a year, II 800 to 1,000 mm, III above 1,000 mm."}
-OVERALL = ["Possible moisture stress", "Watch", "No major concern", "Not enough data"]
-for _k, (_lab, _col) in LEVELS.items():
-    CLASS_COLORS.setdefault(_lab, _col)
-LAYERS["overall"] = {"label": "Overall assessment", "short": "Overall", "ind": "_overall", "icon": "gauge",
-                     "classes": OVERALL[:3],
-                     "what": "All layers read together (rain, soil moisture, vegetation, temperature): the platform's "
+OVERALL = [STATUS[k][0] for k in ("priority", "attention", "watch", "stable", "insufficient")]
+for _k, (_lab, _col) in STATUS.items():
+    CLASS_COLORS[_lab] = _col
+LAYERS["overall"] = {"label": "Agricultural condition", "short": "Condition", "ind": "_overall", "icon": "gauge",
+                     "classes": OVERALL[:4],
+                     "what": "Crop greenness, soil water, rainfall and temperature read together: the platform's "
                              "assessment of each district."}
-LAYERS = {k: LAYERS[k] for k in ["overall", "water", "vegetation", "rainfall", "temperature", "zones", "maize", "solar"]}
-HOME_LAYERS = ["overall", "water", "vegetation", "rainfall", "temperature", "solar"]
+# solar is kept in the data pipeline but is not part of the intelligence experience
+LAYERS = {k: LAYERS[k] for k in ["overall", "vegetation", "water", "rainfall", "temperature", "zones", "maize"]}
+HOME_LAYERS = ["overall", "vegetation", "water", "rainfall", "temperature"]
 ICONS["sun"] = ('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2'
                 'M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>')
 ICONS["thermo"] = '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0Z"/><path d="M12 9v7"/>'
@@ -989,11 +994,11 @@ def layer_table(nd, key):
     D = nd.districts.set_index("district_id")
     rows = []
     for did, it in district_levels(nd).items():
-        lab = LEVELS[it["level"]][0]
+        lab = STATUS[it["status"]][0]
         rows.append({"location_id": did, "location_name": D.loc[did, "district"], "province": D.loc[did, "province"],
                      "status": "ok" if it["level"] != "unknown" else "pending", "class": lab,
-                     "value": {"concern": 0, "watch": 1, "normal": 2}.get(it["level"], 3),
-                     "display": lab if it["level"] == "normal" else f"{lab}: {it['short']}".replace(
+                     "value": {"priority": 0, "attention": 1, "watch": 2, "stable": 3}.get(it["status"], 4),
+                     "display": lab if it["status"] in ("stable", "priority") else f"{lab}: {it['short']}".replace(
                          "Watch: Early sign: ", "Watch: "),
                      "data_type": "derived", "confidence": "Medium", "source": "FieldPriority, all layers together",
                      "source_url": "", "period_label": period_of(nd), "resolution": "District", "coverage": "District",
@@ -1203,13 +1208,6 @@ def national_summary(nd, fields):
     out.append(("camera", f"{appr}", "verified field reports", "Local observations",
                 f"{vis} real field visit(s) received through KoboToolbox, {ph} photo(s), across "
                 f"{fields[fields['visits'] > 0]['pilot'].nunique() if nf else 0} pilot area(s).", "field_observation", "High" if appr else "Low"))
-    sol = ok("solar_resource")
-    if len(sol):
-        out.append(("sun", f"{sol['value'].median():.1f}", "kWh/m² per day (median)", "Solar potential",
-                    f"Range {sol['value'].min():.1f} to {sol['value'].max():.1f} across districts, "
-                    f"{sol['period_label'].iloc[0]}. Resource only.", "satellite_estimate", "Medium"))
-    else:
-        out.append(("sun", "–", "Not yet available", "Solar potential", "", "derived", ""))
     return out
 
 
@@ -1405,7 +1403,7 @@ _WARN = {"Drier than normal", "Warmer than normal", "Below normal", "Possible wa
          "Early sign: rainfall deficit"}
 
 
-def _node(rec, title, ic, state=None, value=None, note=None):
+def _node(rec, title, ic, state=None, value=None, note=None, dtype=None):
     ok = bool(rec) and rec.get("status") == "ok"
     if value is None:
         value = str(rec.get("display")).split(" · ")[0] if ok else "–"
@@ -1413,43 +1411,127 @@ def _node(rec, title, ic, state=None, value=None, note=None):
     if state is None:
         state = "none" if not ok else "bad" if cls in _BAD else "warn" if cls in _WARN else "ok"
     fg, bg = STATE[state]
-    note = note if note is not None else (cls if cls and cls != value else ("Not yet available" if not ok else ""))
-    tip = E(evidence_line(rec)) if ok else E((rec or {}).get("quality_note") or "Not yet available")
+    note = note if note is not None else (cls if cls and cls != value else ("Not in this period" if not ok else ""))
+    tip = E(evidence_line(rec)) if ok else E((rec or {}).get("quality_note") or "Not available for this period")
+    dtype = dtype or (rec or {}).get("data_type")
+    tag = f'<div class="t">{type_tag(dtype)}</div>' if dtype else ""
     return (f'<div class="fp-node" style="border-color:{fg}33;background:{bg}" title="{tip}">'
             f'<div class="h" style="color:{fg}">{icon(ic, 15, fg)} {E(title)}</div>'
-            f'<div class="v">{E(value)}</div><div class="n" style="color:{fg}">{E(note or "")}</div></div>')
+            f'<div class="v">{E(value)}</div><div class="n" style="color:{fg}">{E(note or "")}</div>{tag}</div>')
 
 
-def signal_chain_html(recs, fields=None, together=""):
-    """Weather -> water -> crop -> options: the six layers as one chain for a location."""
+def _field_node(fields):
     f = fields if fields is not None else pd.DataFrame()
     if len(f):
         hi = int(f["risk_level"].isin(["High", "Moderate", "Not attributed"]).sum())
         wa = int((f["risk_level"] == "Watch").sum())
-        crop = _node({"status": "ok"}, "Monitored fields", "camera", "bad" if hi else "warn" if wa else "ok",
-                     f"{len(f)} field{'s' if len(f) > 1 else ''}",
-                     f"{hi} with crop stress" if hi else f"{wa} on watch" if wa else "No crop-stress flag")
-    else:
-        crop = _node(None, "Monitored fields", "camera", "none", "–", "No fields here yet")
-    sol = recs.get("solar_resource") or {}
+        vis = int(f["visits"].sum()) if "visits" in f else 0
+        return _node({"status": "ok"}, "Field evidence", "camera", "bad" if hi else "warn" if wa else "ok",
+                     f"{len(f)} field{'s' if len(f) > 1 else ''} · {vis} visit{'s' if vis != 1 else ''}",
+                     f"{hi} with crop stress" if hi else f"{wa} on watch" if wa else "No crop-stress flag",
+                     dtype="field_observation")
+    return _node(None, "Field evidence", "camera", "none", "None yet", "Submit a field observation",
+                 dtype="field_observation")
+
+
+def signal_chain_html(recs, fields=None, together=""):
+    """The evidence behind an assessment, in the order the platform reads it: field & satellite evidence ->
+    environmental conditions -> water -> integrated assessment. Every box says what kind of data it is."""
     groups = [
-        ("Weather", [_node(recs.get("rainfall_anomaly_pct"), "Rainfall", "drop"),
-                     _node(recs.get("temperature_deviation"), "Temperature", "thermo")]),
+        ("Field & satellite evidence", [_field_node(fields),
+                                        _node(recs.get("vegetation_anomaly_pct"), "Crop greenness", "leaf")]),
+        ("Environmental conditions", [_node(recs.get("rainfall_anomaly_pct"), "Rainfall", "drop"),
+                                      _node(recs.get("temperature_deviation"), "Temperature", "thermo")]),
         ("Water", [_node(recs.get("soil_moisture_anomaly_pct"), "Soil moisture", "drop"),
                    _node(recs.get("water_stress"), "Water stress", "gauge",
                          value=(recs.get("water_stress") or {}).get("class") or "–", note="")]),
-        ("Crop", [_node(recs.get("vegetation_anomaly_pct"), "Vegetation", "leaf"), crop]),
-        ("Options", [_node(sol, "Solar for pumping", "sun", "info" if sol.get("status") == "ok" else "none",
-                           note="Resource only")]),
     ]
     cols = []
     for i, (g, nodes) in enumerate(groups):
         cols.append(f'<div class="fp-grp"><div class="gh">{E(g)}</div>{"".join(nodes)}</div>')
-        if i < len(groups) - 1:
-            cols.append(f'<div class="fp-arr"><span>→</span><small>{("fills the soil", "feeds the crop", "what can help")[i]}'
-                        '</small></div>')
+        cols.append('<div class="fp-arr"><span>→</span></div>')
+    cols.append('<div class="fp-grp"><div class="gh">Integrated analysis</div><div class="fp-node fp-intel">'
+                f'{icon("gauge", 22, "#F2C74E")}<b>Location intelligence</b><small>All layers read together</small>'
+                '</div></div>')
     return (f'<div class="fp-chain">{"".join(cols)}</div>'
             + (f'<div class="fp-together"><b>Together:</b> {E(together)}</div>' if together else ""))
+
+
+# ---------------------------------------------------------------- current agricultural condition (the dominant read)
+def _arrow(v, near, up_bad):
+    """(arrow, state) for a signed anomaly; 'near' is the band treated as steady."""
+    if v is None or pd.isna(v):
+        return "–", "none"
+    if abs(v) < near:
+        return "→", "ok"
+    up = v > 0
+    bad = up == up_bad
+    return ("↑" if up else "↓"), ("warn" if bad else "ok")
+
+
+def condition_signals(recs, fields=None):
+    """The five headline signals: (label, arrow, state, short text, data type)."""
+    def val(k):
+        r = recs.get(k) or {}
+        try:
+            return float(r["value"]) if r.get("status") == "ok" else None
+        except (TypeError, ValueError):
+            return None
+    out = []
+    for k, lab, near, up_bad in (("vegetation_anomaly_pct", "Crop / vegetation", 5, False),
+                                 ("rainfall_anomaly_pct", "Rainfall", 10, False),
+                                 ("temperature_deviation", "Temperature", .5, True)):
+        r = recs.get(k) or {}
+        a, st_ = _arrow(val(k), near, up_bad)
+        if r.get("class") in _BAD:
+            st_ = "bad"
+        out.append((lab, a, st_, str(r.get("display") or "–").split(" · ")[0] if r.get("status") == "ok" else
+                    "Not in this period", r.get("data_type") or "derived"))
+    ws = recs.get("water_stress") or {}
+    c = ws.get("class") if ws.get("status") == "ok" else None
+    a, st_ = {"Likely water stress": ("↑", "bad"), "Possible water stress": ("↑", "warn"),
+              "Early sign: rainfall deficit": ("↗", "warn")}.get(c, ("→", "ok") if c else ("–", "none"))
+    out.append(("Water stress", a, st_, c or "Not in this period", "derived"))
+    f = fields if fields is not None else pd.DataFrame()
+    if len(f):
+        vis = int(f["visits"].sum()) if "visits" in f else 0
+        hi = int(f["risk_level"].isin(["High", "Moderate", "Not attributed"]).sum())
+        out.append(("Field evidence", "✓" if vis else "○", ("bad" if hi else "ok") if vis else "warn",
+                    f"{vis} visit{'s' if vis != 1 else ''}, {len(f)} field{'s' if len(f) > 1 else ''}"
+                    if vis else f"{len(f)} field{'s' if len(f) > 1 else ''}, awaiting visit", "field_observation"))
+    else:
+        out.append(("Field evidence", "○", "none", "None yet", "field_observation"))
+    return out
+
+
+CONFIDENCE_WORDS = {"Strong": "High confidence", "Good": "Moderate confidence", "Partial": "Limited evidence",
+                    "Limited": "Insufficient data"}
+
+
+def condition_strip_html(status_key, sigs, evidence=None, sub=""):
+    lab, col = STATUS[status_key]
+    cells = "".join(
+        f'<div class="c" title="{E(t)} · {E(DATA_TYPES.get(dt_, (dt_,))[0])}"><div class="l">{E(lab_)}</div>'
+        f'<div class="a" style="color:{STATE[st_][0]}">{E(a)}</div><div class="t">{E(t)}</div></div>'
+        for lab_, a, st_, t, dt_ in sigs)
+    conf = CONFIDENCE_WORDS.get(evidence or "", "")
+    return (f'<div class="fp-cond"><div class="s" style="background:{col}"><div class="k">Current agricultural condition'
+            f'</div><div class="w">{E(lab)}</div><div class="x">{E(sub)}</div>'
+            + (f'<div class="cf">{E(conf)}</div>' if conf else "") + f'</div><div class="g">{cells}</div></div>')
+
+
+def field_to_intel_html(compact=False):
+    steps = [("camera", "Observe", "Crop and conditions recorded in the field"),
+             ("doc", "Submit", "Entered through KoboToolbox"),
+             ("pin", "Connect", "Linked to its location"),
+             ("layers", "Combine", "Satellite, rainfall, temperature, water"),
+             ("gauge", "Interpret", "Evidence evaluated together"),
+             ("leaf", "Understand", "Location-specific intelligence")]
+    cells = "".join(f'<div class="st"><div class="n">{i}</div>{icon(ic, 22, "#1F4D3A")}<b>{E(t)}</b>'
+                    + ("" if compact else f'<small>{E(d)}</small>') + '</div>'
+                    + ('<div class="ar">→</div>' if i < len(steps) else "")
+                    for i, (ic, t, d) in enumerate(steps, 1))
+    return f'<div class="fp-f2i"><div class="hd">From the field to intelligence</div><div class="row">{cells}</div></div>'
 
 
 def answer_cards_html(what, what_sub, why, why_sub, nxt, color):
@@ -1526,11 +1608,11 @@ def signal_list_html(recs, fields=None):
     """The connected layers as a compact vertical chain (homepage spotlight)."""
     rows = []
     f = fields if fields is not None else pd.DataFrame()
-    items = [("Weather", "Rainfall", "drop", recs.get("rainfall_anomaly_pct")),
+    items = [("Crop", "Vegetation", "leaf", recs.get("vegetation_anomaly_pct")),
+             ("Conditions", "Rainfall", "drop", recs.get("rainfall_anomaly_pct")),
              ("", "Temperature", "thermo", recs.get("temperature_deviation")),
              ("Water", "Soil moisture", "drop", recs.get("soil_moisture_anomaly_pct")),
-             ("", "Water stress", "gauge", recs.get("water_stress")),
-             ("Crop", "Vegetation", "leaf", recs.get("vegetation_anomaly_pct"))]
+             ("", "Water stress", "gauge", recs.get("water_stress"))]
     for g, t, ic, rec in items:
         ok = bool(rec) and rec.get("status") == "ok"
         cls = (rec or {}).get("class") if ok else None
@@ -1539,10 +1621,7 @@ def signal_list_html(recs, fields=None):
         rows.append((g, t, ic, v, st_))
     if len(f):
         hi = int(f["risk_level"].isin(["High", "Moderate", "Not attributed"]).sum())
-        rows.append(("", "Monitored fields", "camera", f"{len(f)} · {hi} flagged", "bad" if hi else "ok"))
-    sol = recs.get("solar_resource") or {}
-    rows.append(("Options", "Solar for pumping", "sun", str(sol.get("display", "–")).split(" · ")[0]
-                 if sol.get("status") == "ok" else "–", "info"))
+        rows.append(("Field", "Monitored fields", "camera", f"{len(f)} · {hi} flagged", "bad" if hi else "ok"))
     out = ""
     for g, t, ic, v, st_ in rows:
         fg, bg = STATE[st_]
@@ -1566,18 +1645,18 @@ def national_answers(nd, fields):
     if not flag:
         what, colr = "Good growing conditions across Zambia", "#2E8B57"
     elif len(conc) > n / 4:
-        what, colr = f"Moisture stress building in {len(conc)} districts", "#B9342B"
+        what, colr = f"Crop moisture stress building in {len(conc)} districts", "#B9342B"
     else:
         what, colr = f"Mostly good conditions; {len(flag)} district{'s' if len(flag) > 1 else ''} to watch", "#C8870F"
     parts = []
-    rain = ok("rainfall_anomaly_pct")
-    if len(rain):
-        parts.append(f"rain {float(pd.to_numeric(rain['value'], errors='coerce').median()):+.0f}%")
-    for ind, lab in (("vegetation_anomaly_pct", "vegetation"), ("soil_moisture_anomaly_pct", "soil moisture")):
+    for ind, lab in (("vegetation_anomaly_pct", "crop greenness"), ("soil_moisture_anomaly_pct", "soil moisture")):
         t = ok(ind)
         if len(t):
             b = int(t["class"].isin(["Below normal", "Well below normal"]).sum())
             parts.append(f"{lab} below normal in {b} of {len(t)}")
+    rain = ok("rainfall_anomaly_pct")
+    if len(rain):
+        parts.append(f"rainfall {float(pd.to_numeric(rain['value'], errors='coerce').median()):+.0f}% (median)")
     tmp = ok("temperature_deviation")
     if len(tmp):
         parts.append(f"temperature above normal in "
@@ -1597,14 +1676,14 @@ def national_answers(nd, fields):
     else:
         why = f"{len(flag)} district(s) show signs of stress."
     why_sub = "Maize is Zambia's staple: stress in maize areas affects food security and income."
-    nxt = [f"Check the {len(flag)} district{'s' if len(flag) > 1 else ''} to watch"] if flag else []
+    nxt = [f"Consider field checks in the {len(flag)} flagged district{'s' if len(flag) > 1 else ''}"] if flag else []
     spec, S, _, _ = zmd_seasonal()
     if spec is not None and len(S):
         d = S[S["period"] == "DJF"]
         nb = int((d["rank"] <= 2).sum())
         if nb > len(d) / 2:
-            nxt.append(f"Prepare for a drier Dec–Feb: ZMD expects it in {nb} districts")
-    nxt.append("Send field reports from the ground (KoboToolbox)" if kobo_form_url() else
+            nxt.append(f"Consider a drier Dec–Feb: ZMD expects it in {nb} districts")
+    nxt.append("Add field observations to strengthen the picture" if kobo_form_url() else
                "Open any district for its full picture")
     return what, sub, why, why_sub, nxt, colr
 
@@ -1617,7 +1696,7 @@ def kobo_form_url():
         return ""
 
 
-def kobo_button(label="Submit a field report", small=False):
+def kobo_button(label="Submit Field Observation", small=False):
     u = kobo_form_url()
     if not u:
         return ""
@@ -1703,5 +1782,55 @@ CSS_WX = """
 .fp-wday .rn{font-size:.8rem;color:var(--muted)}
 .fp-wday .rn.wet{color:#1F4E80;font-weight:600}
 @media (max-width: 700px){ .fp-wdays{grid-template-columns:1fr} }
+</style>
+"""
+
+
+CSS_V6 = """
+<style>
+.fp-cond{display:grid;grid-template-columns:minmax(220px,.9fr) 2.6fr;gap:0;border-radius:18px;overflow:hidden;
+  border:1px solid var(--line);background:#fff;margin:.2rem 0 .9rem;box-shadow:0 4px 16px rgba(20,35,58,.06)}
+.fp-cond .s{padding:16px 22px;color:#fff;display:flex;flex-direction:column;justify-content:center}
+.fp-cond .s .k{font:700 .7rem var(--fb);letter-spacing:.12em;text-transform:uppercase;opacity:.9}
+.fp-cond .s .w{font:800 2.3rem/1.05 var(--fh);margin:.25rem 0 .2rem;color:#fff;text-transform:uppercase;letter-spacing:.02em}
+.fp-cond .s .x{font-size:.9rem;line-height:1.35;opacity:.95}
+.fp-cond .s .cf{margin-top:.55rem;font:600 .72rem var(--fb);opacity:.8}
+.fp-cond .g{display:grid;grid-template-columns:repeat(5,1fr)}
+.fp-cond .c{padding:14px 10px;text-align:center;border-left:1px solid var(--line);cursor:help;display:flex;
+  flex-direction:column;justify-content:center}
+.fp-cond .c .l{font:700 .72rem var(--fb);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.fp-cond .c .a{font:800 2.3rem/1.1 var(--fb);margin:.15rem 0}
+.fp-cond .c .t{font-size:.8rem;color:var(--ink);font-weight:600;line-height:1.25}
+.fp-node .t{margin-top:4px}
+.fp-panel-h a.fp-kobo,.fp-zban a.fp-kobo,a.fp-kobo{color:#fff !important}
+.fp-node .t .fp-src{font-size:.66rem;padding:1px 7px}
+.fp-intel{background:var(--forest) !important;border-color:var(--forest) !important;color:#fff;display:flex;
+  flex-direction:column;align-items:center;gap:4px;padding:16px 10px !important;text-align:center;cursor:default}
+.fp-intel b{font:800 1rem var(--fh);color:#fff}
+.fp-intel small{color:#CFE0D3;font-size:.72rem}
+.fp-f2i{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px 16px 14px;margin:.4rem 0 .9rem}
+.fp-f2i .hd{font:700 .72rem var(--fb);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.fp-f2i .row{display:flex;align-items:stretch;gap:6px}
+.fp-f2i .st{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;gap:3px;background:#F6F3EA;
+  border-radius:12px;padding:10px 6px;position:relative}
+.fp-f2i .st .n{position:absolute;top:6px;left:8px;font:700 .7rem var(--fb);color:#B8B09A}
+.fp-f2i .st b{font:800 .95rem var(--fh);color:var(--ink)}
+.fp-f2i .st small{font-size:.74rem;color:var(--muted);line-height:1.25}
+.fp-f2i .st:nth-child(1),.fp-f2i .st:nth-child(3){background:#EFE9F7}
+.fp-f2i .ar{align-self:center;color:#B8B09A;font:700 1.2rem var(--fb)}
+.fp-crop{display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:start}
+.fp-crop .ph{width:150px;height:150px;border-radius:12px;background:#EEE8D8 center/cover;display:grid;place-items:center}
+.fp-crop dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0;font-size:.88rem}
+.fp-crop dt{color:var(--muted);font-weight:600}
+.fp-crop dd{margin:0;font-weight:700;color:var(--ink)}
+.fp-flow4{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin:.2rem 0 1.1rem}
+.fp-flow4 span{font:700 .64rem var(--fb);letter-spacing:.08em;color:#F2C74E;border:1px solid rgba(242,199,78,.55);
+  padding:3px 7px;border-radius:6px;white-space:nowrap}
+.fp-flow4 i{color:#F2C74E;font-style:normal}
+@media (max-width: 1000px){ .fp-cond{grid-template-columns:1fr} .fp-cond .g{grid-template-columns:repeat(3,1fr)}
+  .fp-cond .c{border-top:1px solid var(--line)} .fp-f2i .row{flex-wrap:wrap} .fp-f2i .st{flex:1 1 30%}
+  .fp-f2i .ar{display:none} }
+@media (max-width: 640px){ .fp-panel-h{flex-wrap:wrap;gap:6px} .fp-hint{display:none} .fp-cond .g{grid-template-columns:repeat(2,1fr)} .fp-cond .s .w{font-size:1.8rem}
+  .fp-crop{grid-template-columns:1fr} .fp-f2i .st{flex:1 1 45%} }
 </style>
 """

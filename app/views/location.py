@@ -1,11 +1,12 @@
-"""Location intelligence: the key message first (what is happening, why it matters, what next), the connected
-evidence as one picture, then charts, map and crop evidence. Full detail sits in expanders."""
+"""Explore a location: the current agricultural condition first, then what is happening / why it matters / what to
+consider, the evidence behind it (field, satellite, model, derived), crop evidence, map and charts. Detail in expanders."""
 import altair as alt
 import pandas as pd
 import streamlit as st
 from _lib import (html_block, icon, badge, national, monitored_fields, location_records, build_zambia_map, show_map,
                   period_of, type_tag, empty, link, interpret, kobo_photo, signal_chain_html, answer_cards_html, kobo_button,
-                  zmd_seasonal, zmd_alerts, zmd_cat_chip, ZMD, LEVELS, NCFG, NMON, E)
+                  condition_signals, condition_strip_html, field_to_intel_html, conf_tag,
+                  zmd_seasonal, zmd_alerts, zmd_cat_chip, ZMD, STATUS, NCFG, NMON, E)
 
 nd = national()
 F = monitored_fields(nd)
@@ -89,9 +90,9 @@ rain_m = month_table("rainfall_mm")
 monthly_rain = {r["m"]: ((r["This season"] - r["Normal"]) / r["Normal"] * 100
                          if r["Normal"] and pd.notna(r["This season"]) else None)
                 for r in rain_m.to_dict("records")} if len(rain_m) else {}
-flds = [{"field_id": r.field_id, "risk_level": r.risk_level} for r in here.itertuples()] if len(here) else []
+flds = [{"field_id": r.field_id, "risk_level": r.risk_level, "visits": r.visits} for r in here.itertuples()] if len(here) else []
 it = interpret(name, recs, NCFG["classes"], fields=flds, monthly_rain=monthly_rain, period_label=per)
-lab, col = LEVELS[it["level"]]
+lab, col = STATUS[it["status"]]
 
 with s2:
     if recs:
@@ -125,50 +126,72 @@ if not nd.available:
           "sync_firebase.bat for the online dashboard.")
     st.stop()
 
-# ---------------------------------------------------------------- 1. the three answers
-what_sub = it["together"]
+# ---------------------------------------------------------------- 1. current agricultural condition (dominant)
+html_block(condition_strip_html(it["status"], condition_signals(recs, here), it.get("evidence"), it["short"]))
+
+# ---------------------------------------------------------------- 2. the integrated interpretation (hero)
 why_sub = (f"{mz['class']} {kind} ({float(mz['value']):.0f}% of land under maize)." if mz.get("status") == "ok" else "")
 why_sub += (" " + it["why"][1]) if len(it["why"]) > 1 else ""
-html_block(answer_cards_html(it["short"], E(what_sub), it["why"][0], E(why_sub.strip()), it["next"] or
-                             ["Keep monitoring monthly"], col))
+html_block(answer_cards_html(it["together"], "", it["why"][0], E(why_sub.strip()), it["next"] or
+                             ["Continue routine monitoring"], col))
 
-# ---------------------------------------------------------------- 2. the connected evidence
+# ---------------------------------------------------------------- 3. the evidence behind it
 with st.container(border=True):
-    html_block(f'<div class="fp-panel-h"><span>{icon("layers", 18, "#1F4D3A")} Six layers, one picture</span>'
-               f'<span class="fp-mini">Hover any box for its source, date and confidence</span></div>')
+    html_block(f'<div class="fp-panel-h"><span>{icon("layers", 18, "#1F4D3A")} The evidence behind this assessment</span>'
+               f'<span style="display:flex;gap:10px;align-items:center"><span class="fp-mini fp-hint">Hover a box for source, '
+               f'date and confidence</span>{kobo_button(small=True)}</span></div>')
     html_block(signal_chain_html(recs, here))
 
-# official outlook (ZMD), one line
-zspec, ZS, ZON, _ = zmd_seasonal()
-try:
-    ZT, zst = zmd_alerts(nd)
-except Exception:
-    ZT, zst = pd.DataFrame(), {"have": False}
-zact = ZT[ZT["active"] & ZT["districts"].map(lambda d: bool(set(d) & set(members)))] if len(ZT) else ZT
-zadv = []
-if zspec is not None and len(ZS):
-    Zm = ZS[ZS["district_id"].isin(members)]
-    if is_prov:
-        djf = Zm[Zm["period"] == "DJF"]["code"].value_counts()
-        zline = "Dec–Feb: " + " ".join(zmd_cat_chip(k, f"{ZMD.CATEGORIES[k][1]} · {n}", small=True)
-                                       for k, n in djf.items())
-    else:
-        Zr = Zm.set_index("period")
-        zline = " ".join(f'<span style="white-space:nowrap"><b>{p}</b> ' + "".join(
-            zmd_cat_chip(c, small=True) for c in str(Zr.loc[p, "codes"]).split("|") if c) + '</span>'
-            for p in ZMD.PERIOD_ORDER if p in Zr.index)
-        zline += f' · Rains start: <b>{E(ZON.set_index("district_id").loc[members[0], "text"])}</b>'
-        zadv = ZMD.advisories_for(zspec, ZMD.district_ranks(ZS, members[0]))
-    warn = (f'<b style="color:#B9342B">{len(zact)} ZMD warning(s) in force</b>' if len(zact) else
-            "No ZMD warning in force" if zst.get("have") else "")
-    html_block(f'<div class="fp-zban" style="background:#EEF3F8;border:1px solid #CFDCE8;color:#14233A;margin:.7rem 0">'
-               f'<div class="ic" style="background:#1F4E80;color:#fff">{icon("storm", 20)}</div><div style="flex:1;'
-               f'min-width:260px"><b>ZMD rainfall outlook {E(zspec["season"])}</b> &nbsp;{zline}'
-               f'<div class="fp-mini" style="margin-top:3px">{warn}</div></div>'
-               f'<a href="{link("/weather", district=None if is_prov else did)}" target="_self">Weather &amp; '
-               f'warnings →</a></div>')
+# ---------------------------------------------------------------- 4. crop evidence (one evidence layer)
+def crop_card(r):
+    pics = [(k, when, a) for k, when, a in (r.pics or [])]
+    pics.sort(key=lambda x: x[0] != "Crop")
+    img = kobo_photo(pics[0][2].get("download_medium_url") or pics[0][2].get("download_url")) if pics else None
+    cond = {"High": "Crop stress (high)", "Moderate": "Crop stress (moderate)", "Watch": "Water deficit, crop still green",
+            "Low": "Healthy", "Not attributed": "Below normal, cause unclear",
+            "Insufficient data": "Awaiting the latest satellite pass"}.get(r.risk_level, r.risk_level)
+    ok_ = lambda x: x is not None and str(x).strip().lower() not in ("", "nan", "none", "unknown")
+    stage = r.last_stage if ok_(r.last_stage) else r.growth_stage if ok_(r.growth_stage) else "To be recorded at the next visit"
+    ver = str(r.verification)
+    if r.visits and ver.lower().startswith("not"):
+        ver = f"Visited {r.last_visit}" if r.last_visit else "Visited"
+    rows = [("Crop identified", r.crop), ("Condition", cond), ("Growth stage", str(stage).replace("_", " ").capitalize()),
+            ("Location", f"{r.lat:.4f}, {r.lon:.4f} · {r.area_ha:.2f} ha"), ("Verification", ver),
+            ("Field visits", f"{r.visits} visit(s), {r.photos} photo(s)"),
+            ("Data quality", {"High": "High confidence", "Medium": "Moderate confidence"}.get(r.data_confidence,
+                                                                                         "Limited evidence"))]
+    c1, c2 = st.columns([1, 2.4], vertical_alignment="top")
+    with c1:
+        if img:
+            st.image(img, caption=f"{pics[0][0]} photo · {pics[0][1]}", width="stretch")
+        else:
+            html_block(f'<div class="fp-crop"><div class="ph">{icon("camera", 34, "#9A927C")}</div></div>'
+                       + (f'<div class="fp-mini">{len(pics)} photo(s) in KoboToolbox</div>' if pics else
+                          '<div class="fp-mini">Photo arrives with the first field observation</div>'))
+    with c2:
+        html_block(f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+                   f'<a href="{link("/assessments", area=r.pilot, field=str(r.field_id))}" target="_self"><b>Field '
+                   f'{E(str(r.field_id))} · {E(r.pilot_short)}</b></a><span>{type_tag("field_observation")} '
+                   f'{type_tag("satellite_estimate")}</span></div><div class="fp-crop" '
+                   f'style="grid-template-columns:1fr"><dl>' + "".join(f"<dt>{E(k)}</dt><dd>{E(str(v))}</dd>" for k, v in rows)
+                   + '</dl></div>')
 
-# ---------------------------------------------------------------- 3. visuals: map and charts
+
+if len(here):
+    with st.container(border=True):
+        html_block(f'<div class="fp-panel-h"><span>{icon("camera", 18, "#1F4D3A")} Crop evidence from the field</span>'
+                   f'<span class="fp-mini">We don\'t just identify the crop: we read the conditions around it</span></div>')
+        for r in here.itertuples():
+            crop_card(r)
+else:
+    kb = kobo_button(small=True)
+    if kb:
+        html_block(f'<div class="fp-zban" style="background:#F3EEF8;border:1px solid #DCCFEA;color:#3B2A55">'
+                   f'<div class="ic" style="background:#6A4C93;color:#fff">{icon("camera", 20)}</div><div style="flex:1">'
+                   f'<b>Add ground evidence.</b> A field observation (crop, condition, photo) links straight to this '
+                   f'location and strengthens the assessment.</div>{kb}</div>')
+
+# ---------------------------------------------------------------- 5. visuals: map and charts
 
 
 def _style(ch):
@@ -178,12 +201,12 @@ def _style(ch):
 
 v1, v2 = st.columns([1, 1.35], gap="medium")
 with v1:
-    show_map(build_zambia_map(nd, "zones" if is_zone else "rainfall", here, focus=members), height=380)
+    show_map(build_zambia_map(nd, "zones" if is_zone else "overall", here, focus=members), height=380)
 with v2:
     S = S_prov.copy() if is_prov else (nd.seasons[nd.seasons["district_id"] == did].copy()
                                        if nd.seasons is not None else pd.DataFrame())
-    tabs = st.tabs(["Rainfall", "Soil moisture", "Vegetation", "Temperature", "Past seasons"])
-    with tabs[0]:
+    tabs = st.tabs(["Vegetation", "Rainfall", "Temperature", "Soil moisture", "Past seasons"])
+    with tabs[1]:
         if len(rain_m) and rain_m["This season"].notna().any():
             order = list(rain_m["Month"])
             b = alt.Chart(rain_m).mark_bar(size=26, cornerRadiusEnd=4, color="#4C78A8").encode(
@@ -198,7 +221,7 @@ with v2:
         tm = month_table(var)
         with tab:
             if not (len(tm) and tm["This season"].notna().any()):
-                st.caption("Not available for this location yet.")
+                st.caption("This layer has no monthly series for this location in the current period.")
                 return
             order = list(tm["Month"])
             lt = tm.melt(id_vars=["Month"], value_vars=["This season", "Normal"], var_name="Series", value_name="v")
@@ -212,9 +235,9 @@ with v2:
                 tooltip=["Month", "Series", alt.Tooltip("v:Q", format=fmt, title=ytitle)])
             st.altair_chart(_style(ch.properties(height=290)), width="stretch")
 
-    line_tab(tabs[1], "sm_rootzone", "Root-zone soil moisture (m³/m³)", ".3f", "#1F78B4", .4)
-    line_tab(tabs[2], "ndvi", "Vegetation greenness (NDVI)", ".2f", "#2E8B57", .4)
-    line_tab(tabs[3], "t2m", "Mean temperature (°C)", ".1f", "#B9342B", .4)
+    line_tab(tabs[0], "ndvi", "Vegetation greenness (NDVI)", ".2f", "#2E8B57", .4)
+    line_tab(tabs[2], "t2m", "Mean temperature (°C)", ".1f", "#B9342B", .4)
+    line_tab(tabs[3], "sm_rootzone", "Root-zone soil moisture (m³/m³)", ".3f", "#1F78B4", .4)
     if len(S):
         S = S.sort_values("season_start")
         S["current"] = S["current"].astype(str).str.lower().isin(["true", "1"])
@@ -248,55 +271,50 @@ with v2:
                                + ("driest to wettest" if var == "rainfall_mm" else "coolest to warmest")
                                + ". Orange dashed line: normal.")
 
-# ---------------------------------------------------------------- 4. crop evidence (only where fields exist)
-if len(here):
-    with st.container(border=True):
-        html_block(f'<div class="fp-panel-h"><span>{icon("camera", 18, "#1F4D3A")} Crop evidence from monitored '
-                   f'fields</span>{kobo_button("Add a field report", small=True) or type_tag("field_observation")}</div>')
-        fc = st.columns(min(len(here), 3))
-        for i, r in enumerate(here.itertuples()):
-            with fc[i % len(fc)]:
-                html_block(f'<div class="fp-card" style="padding:12px 14px"><div style="display:flex;justify-content:'
-                           f'space-between;align-items:center"><a href="{link("/assessments", area=r.pilot, field=str(r.field_id))}" '
-                           f'target="_self"><b>Field {E(str(r.field_id))}</b></a>{badge(r.risk_level)}</div>'
-                           f'<div class="fp-mini" style="margin-top:4px">{E(r.pilot_short)} pilot · {r.area_ha:.2f} ha · '
-                           f'maize · stage: {E(str(r.growth_stage or "unknown"))}<br>{E(str(r.verification))} · '
-                           f'{r.visits} visit(s), {r.photos} photo(s)</div></div>')
-        pics = [(r.field_id, k, when, a) for r in here.itertuples() for k, when, a in (r.pics or [])]
-        if pics:
-            pc = st.columns(4)
-            shown = 0
-            for i, (fid, kind_, when, a) in enumerate(pics[:4]):
-                img = kobo_photo(a.get("download_medium_url") or a.get("download_url"))
-                with pc[i]:
-                    if img:
-                        st.image(img, caption=f"Field {fid} · {kind_} · {when}", width="stretch")
-                        shown += 1
-                    else:
-                        html_block(f'<div class="fp-photo" style="font-size:.85rem">{icon("camera", 16, "#1F4D3A")} '
-                                   f'<a href="{E(str(a.get("download_medium_url") or a.get("download_url")))}" '
-                                   f'target="_blank">{E(kind_)} photo · field {E(str(fid))} · {E(str(when))}</a></div>')
-            if not shown:
-                st.caption("Photos open in KoboToolbox (add KOBO_TOKEN to the app secrets to show them here).")
+# ---------------------------------------------------------------- 6. official outlook (supports the picture)
+# official outlook (ZMD), one line
+zspec, ZS, ZON, _ = zmd_seasonal()
+try:
+    ZT, zst = zmd_alerts(nd)
+except Exception:
+    ZT, zst = pd.DataFrame(), {"have": False}
+zact = ZT[ZT["active"] & ZT["districts"].map(lambda d: bool(set(d) & set(members)))] if len(ZT) else ZT
+zadv = []
+if zspec is not None and len(ZS):
+    Zm = ZS[ZS["district_id"].isin(members)]
+    if is_prov:
+        djf = Zm[Zm["period"] == "DJF"]["code"].value_counts()
+        zline = "Dec–Feb: " + " ".join(zmd_cat_chip(k, f"{ZMD.CATEGORIES[k][1]} · {n}", small=True)
+                                       for k, n in djf.items())
+    else:
+        Zr = Zm.set_index("period")
+        zline = " ".join(f'<span style="white-space:nowrap"><b>{p}</b> ' + "".join(
+            zmd_cat_chip(c, small=True) for c in str(Zr.loc[p, "codes"]).split("|") if c) + '</span>'
+            for p in ZMD.PERIOD_ORDER if p in Zr.index)
+        zline += f' · Rains start: <b>{E(ZON.set_index("district_id").loc[members[0], "text"])}</b>'
+        zadv = ZMD.advisories_for(zspec, ZMD.district_ranks(ZS, members[0]))
+    warn = (f'<b style="color:#B9342B">{len(zact)} ZMD warning(s) in force</b>' if len(zact) else
+            "No ZMD warning in force" if zst.get("have") else "")
+    html_block(f'<div class="fp-zban" style="background:#EEF3F8;border:1px solid #CFDCE8;color:#14233A;margin:.2rem 0 .7rem">'
+               f'<div class="ic" style="background:#1F4E80;color:#fff">{icon("storm", 20)}</div><div style="flex:1;'
+               f'min-width:260px"><b>Official ZMD seasonal outlook {E(zspec["season"])}</b> &nbsp;{zline}'
+               f'<div class="fp-mini" style="margin-top:3px">{warn}</div></div>'
+               f'<a href="{link("/weather", district=None if is_prov else did)}" target="_self">Weather &amp; '
+               f'warnings →</a></div>')
 
-else:
-    kb = kobo_button("Send the first field report from here", small=True)
-    if kb:
-        html_block(f'<div class="fp-zban" style="background:#F3EEF8;border:1px solid #DCCFEA;color:#3B2A55">'
-                   f'<div class="ic" style="background:#6A4C93;color:#fff">{icon("camera", 20)}</div><div style="flex:1">'
-                   f'<b>No ground evidence here yet.</b> Field photos and observations make this picture stronger.</div>'
-                   f'{kb}</div>')
 
-# ---------------------------------------------------------------- details, one click away
-with st.expander("Full interpretation and next steps"):
+# ---------------------------------------------------------------- 7. details, one click away
+html_block(field_to_intel_html(compact=True))
+
+with st.expander("Details: full interpretation, maize impact and considerations"):
     for p in it["paragraphs"]:
         st.markdown(p)
     st.markdown("**How this may affect maize**\n" + "\n".join(f"- {x}" for x in it["maize"]))
-    st.markdown("**Practical considerations**\n" + "\n".join(f"- {x}" for x in it["considerations"]))
+    st.markdown("**Considerations**\n" + "\n".join(f"- {x}" for x in it["considerations"]))
     if zadv:
         st.markdown("**ZMD advice for farmers here** (seasonal forecast bulletin)\n" + "\n".join(f"- {x}" for x in zadv))
     if it["gaps"]:
-        st.markdown("**Not yet included:** " + "; ".join(it["gaps"]) + ".")
+        st.caption("Layers not used in this assessment: " + "; ".join(it["gaps"]) + ".")
 
 if is_prov:
     with st.expander(f"Districts in {name} ({len(rows_d)})"):
@@ -305,7 +323,7 @@ if is_prov:
             rr = location_records(nd, r.district_id)
             itd = interpret(r.district, rr, NCFG["classes"])
             cell = lambda k: str((rr.get(k) or {}).get("display") or "–").split(" · ")[0]
-            tab.append({"District": r.district, "Assessment": LEVELS[itd["level"]][0],
+            tab.append({"District": r.district, "Condition": STATUS[itd["status"]][0],
                         "Rainfall": cell("rainfall_anomaly_pct"), "Soil moisture": cell("soil_moisture_anomaly_pct"),
                         "Vegetation": cell("vegetation_anomaly_pct"), "Temperature": cell("temperature_deviation"),
                         "Report": f"/location?district={r.district_id}"})
