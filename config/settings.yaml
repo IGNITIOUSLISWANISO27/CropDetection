@@ -27,6 +27,7 @@ sources:
   soil_moisture: "SMAP L4 root-zone soil moisture, monthly area mean, about 9 km cell"
   soil_moisture_baseline: "Same month, all earlier years in Solwezi_Monthly_Soil_Moisture (2021-2024)"
   temperature: "ERA5-Land, about 11 km cell"
+  soil_moisture_download: "ERA5-Land soil moisture 0-7 cm via Open-Meteo, about 11 km cell"   # when the table has no rows for the season
   s1_vv: "Sentinel-1 VV backscatter (dB), 10 m"
 
 extraction:

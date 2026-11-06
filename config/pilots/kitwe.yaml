@@ -28,7 +28,7 @@ tables:
   soil_moisture_layer: surface        # the Miseshi package has SMAP surface soil moisture (20 km area), 2025 only
 
 sources:
-  soil_moisture: "SMAP surface soil moisture, 20 km area around the field (quality-filtered), monthly"
+  soil_moisture: "SMAP surface soil moisture, 20 km area around the field (quality-filtered), monthly (Miseshi package)"
   soil_moisture_baseline: "Same month of earlier years in soil_moisture_monthly.csv (2025 only so far)"
   s1_vv: "Sentinel-1 VV backscatter (dB), 10 m, Miseshi package 2025"
 

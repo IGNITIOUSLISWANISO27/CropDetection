@@ -20,6 +20,17 @@ def _shared(txt):
     return f" (shared with {txt})" if isinstance(txt, str) and txt else ""
 
 
+SM_DOWNLOAD = "ERA5-Land soil moisture 0-7 cm via Open-Meteo, about 11 km cell"
+
+
+def sm_source(r, src):
+    """Name of the soil moisture product actually used for this field: the multi-year table (sm_cell 'area series')
+    or, when the table has no rows for the season, the monthly rasters downloaded by fetch_data (ERA5-Land)."""
+    if str(r.get("sm_cell")) == "area series":
+        return src["soil_moisture"]
+    return src.get("soil_moisture_download") or SM_DOWNLOAD
+
+
 def build_reasons(row, cfg):
     """row: merged season + score + confidence record (dict-like). Returns list of {code, text}."""
     r, out = row, []
@@ -71,7 +82,7 @@ def build_reasons(row, cfg):
 
     # soil moisture and temperature (regional)
     out.append({"code": "SOIL_MOISTURE",
-                "text": f"Regional soil moisture ({src['soil_moisture']}{_shared(r.get('sm_cell_shared_with'))}): "
+                "text": f"Regional soil moisture ({sm_source(r, src)}{_shared(r.get('sm_cell_shared_with'))}): "
                         f"seasonal mean {_f(r['sm_mean'], 3)}; change from the previous month to the latest "
                         f"{_f(r['sm_change_latest'], 3, True)}. Coarse cell value, not a field measurement."})
     out.append({"code": "TEMPERATURE",
