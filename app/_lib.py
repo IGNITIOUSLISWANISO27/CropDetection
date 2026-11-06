@@ -697,9 +697,8 @@ def footer():
             f'<div><div style="font:800 1.15rem var(--fh);color:#fff">FieldPriority</div>'
             f'<div style="color:#CFE0D3;font-size:.8rem">Agricultural &amp; Environmental Intelligence</div></div></div>'
             f'<div class="fp-foot-tag">Understanding conditions. Supporting better decisions.</div>'
-            f'<div style="color:#CFE0D3;font-size:.82rem">Zambia · maize first · pilots: '
-            f'{E(", ".join(_cfg(p)["pilot_short"] for p in PILOTS))}<br>Data: CHIRPS · NASA POWER · Sentinel-2 · '
-            f'SMAP · ERA5-Land · geoBoundaries · KoboToolbox</div>'
+            f'<div style="color:#CFE0D3;font-size:.82rem">Zambia · maize first · all 116 districts<br>Data: ZMD · '
+            f'CHIRPS · NASA POWER · MODIS · SMAP · ESA WorldCereal · Sentinel-2 · geoBoundaries · KoboToolbox</div>'
             + (f'<div style="margin-top:8px">{kobo_button("Field report form (KoboToolbox)", small=True)}</div>'
                if kobo_form_url() else "") + '</div>')
 
