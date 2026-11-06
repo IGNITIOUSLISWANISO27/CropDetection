@@ -202,7 +202,7 @@ else:
         g["txt"] = g["district_id"].map(lambda d: P.loc[d, "text"])
         g["pop"] = [f'<div style="font:13px Inter,sans-serif;min-width:190px"><b>{E(r.district)}</b><div style="margin:5px 0">'
                     f'{E(P.loc[r.district_id, "text"])}</div><a href="{link("/weather", district=r.district_id)}" '
-                    f'target="_top">Weather &amp; warnings for {E(r.district)}</a></div>' for r in g.itertuples()]
+                    f'target="_blank" rel="noopener">Weather &amp; warnings for {E(r.district)}</a></div>' for r in g.itertuples()]
         m = folium.Map(location=[-13.4, 27.8], zoom_start=6, tiles="https://server.arcgisonline.com/ArcGIS/rest/"
                        "services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
                        attr="Esri, HERE, Garmin, © OpenStreetMap contributors")

@@ -470,9 +470,9 @@ def build_map(data, A=None, basemap="Satellite", view="Fit fields", focus=None, 
                f'<div>{E(str(a["outcome"]))}</div><div style="color:#5E6B63;margin-top:6px">'
                f'{r.area_ha:.2f} ha · {loc["lat"]:.5f}, {loc["lon"]:.5f}<br>Data confidence: {E(str(a["data_confidence"]))}'
                f'<br>Verification: {E(status.get(r.Field_ID, "Not yet verified"))}</div>'
-               f'<a href="{profile_link(r.Field_ID)}" target="_top" style="display:inline-block;margin-top:8px;'
+               f'<a href="{profile_link(r.Field_ID)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;'
                f'background:#1F4D3A;color:#fff;padding:6px 11px;border-radius:8px;text-decoration:none">'
-               f'Open field profile</a></div>')
+               f'Open field profile ↗</a></div>')
         folium.GeoJson(r.geometry.__geo_interface__, name=str(r.Field_ID),
                        tooltip=folium.Tooltip(f"<b>{E(str(r.Field_ID))}</b> · {E(RISK.get(lvl, {}).get('short', lvl))}"),
                        popup=folium.Popup(pop, max_width=300),
@@ -1056,8 +1056,8 @@ def build_zambia_map(nd, key, fields=None, focus=None, show_fields=True, height=
         f'<div style="font:13px Inter,sans-serif;min-width:200px"><div style="font-weight:700;font-size:15px">'
         f'{E(r.district)}</div><div style="color:#5E6B63">{E(r.province)} Province</div>'
         f'<div style="margin:6px 0">{E(LAYERS[key]["label"])}: <b>{E(str(r.value))}</b></div>'
-        f'<a href="{link("/location", district=r.district_id)}" target="_top" style="display:inline-block;'
-        f'background:#1F4D3A;color:#fff;padding:6px 11px;border-radius:8px;text-decoration:none">Open location report</a></div>'
+        f'<a href="{link("/location", district=r.district_id)}" target="_blank" rel="noopener" style="display:inline-block;'
+        f'background:#1F4D3A;color:#fff;padding:6px 11px;border-radius:8px;text-decoration:none">Open location report ↗</a></div>'
         for r in g.itertuples()]
     m = folium.Map(location=[-13.4, 27.8], zoom_start=6, tiles=None, control_scale=True, max_zoom=18,
                    min_zoom=5)
@@ -1097,9 +1097,9 @@ def build_zambia_map(nd, key, fields=None, focus=None, show_fields=True, height=
             pop = (f'<div style="font:13px Inter,sans-serif;min-width:200px"><b>Field {E(str(r.field_id))}</b> · '
                    f'{E(r.pilot_short)} pilot<div style="margin:5px 0">{badge(r.risk_level)}</div>'
                    f'<div style="color:#5E6B63">{E(str(r.verification))} · {r.visits} visit(s), {r.photos} photo(s)</div>'
-                   f'<a href="{link("/assessments", area=r.pilot, field=str(r.field_id))}" target="_top" '
+                   f'<a href="{link("/assessments", area=r.pilot, field=str(r.field_id))}" target="_blank" rel="noopener" '
                    f'style="display:inline-block;margin-top:6px;background:#1F4D3A;color:#fff;padding:5px 10px;'
-                   f'border-radius:8px;text-decoration:none">Open field profile</a></div>')
+                   f'border-radius:8px;text-decoration:none">Open field profile ↗</a></div>')
             folium.CircleMarker([r.lat, r.lon], radius=7, color="#FFFFFF", weight=2, fill=True, fill_color=rk["color"],
                                 fill_opacity=1, tooltip=f"Field {r.field_id} · {rk['short']}",
                                 popup=folium.Popup(pop, max_width=280)).add_to(grp)
