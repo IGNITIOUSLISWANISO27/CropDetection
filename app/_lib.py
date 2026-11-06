@@ -1659,3 +1659,50 @@ CSS_V5 = """
   .fp-loc h1{font-size:1.5rem} .fp-loc .lvl{margin-left:0} }
 </style>
 """
+
+
+
+@st.cache_data(ttl=1800, show_spinner="Checking ZMD city forecasts")
+def _zmd_city_doc():
+    doc, ok, err = ZMD.get_city_forecasts(live=True, timeout=8)
+    return doc, ok, err, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+
+def zmd_city(nd=None):
+    """(daily summary per city, all time steps, {district_id: (city, km)}, status) of the ZMD city forecasts."""
+    doc, ok, err, checked = _zmd_city_doc()
+    steps = ZMD.city_steps(doc)
+    days = ZMD.city_days(steps)
+    near = ZMD.nearest_city((nd or national()).districts, days) if len(days) else {}
+    return days, steps, near, {"live": ok, "error": err, "checked": checked, "have": doc is not None,
+                               "retrieved": (doc or {}).get("retrieved_at")}
+
+
+def day_name(d):
+    t = dt.date.fromisoformat(str(d))
+    today = dt.datetime.now(ZMD.CAT).date()
+    return "Today" if t == today else "Tomorrow" if t == today + dt.timedelta(days=1) else t.strftime("%a %d %b")
+
+
+def city_day_card(r):
+    rain = (f'<div class="rn wet">Rain: up to {r["rain_max_mm"]:.1f} mm in {r["rain_periods"]} period(s)</div>'
+            if r["rain_max_mm"] > 0 else '<div class="rn">Dry</div>')
+    return (f'<div class="fp-wday"><div class="d">{E(day_name(r["date"]))}</div>'
+            f'<img src="{E(r["icon"])}" alt="" width="46" height="46" loading="lazy">'
+            f'<div class="c">{E(str(r["condition_label"]).replace(" Night", "").replace(" Day", ""))}</div>'
+            f'<div class="t"><b>{r["high"]:.0f}°</b> / {r["low"]:.0f}°C</div>{rain}</div>')
+
+
+CSS_WX = """
+<style>
+.fp-wdays{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.fp-wday{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}
+.fp-wday .d{font:700 .78rem var(--fb);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.fp-wday img{margin:6px auto 2px;display:block}
+.fp-wday .c{font-weight:600;font-size:.9rem}
+.fp-wday .t{font:800 1.2rem var(--fh);margin:2px 0}
+.fp-wday .rn{font-size:.8rem;color:var(--muted)}
+.fp-wday .rn.wet{color:#1F4E80;font-weight:600}
+@media (max-width: 700px){ .fp-wdays{grid-template-columns:1fr} }
+</style>
+"""

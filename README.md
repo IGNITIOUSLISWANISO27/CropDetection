@@ -69,7 +69,8 @@ link to the original.
 |---|---|---|
 | Warnings and advisories | ZMD public CAP alert feed `https://zmd.gov.zm/api/cap/rss.xml` | read live (checked every 30 minutes); each alert matched to districts by ZMD's drawn area, else the places named. Last download saved in `data/zmd/alerts.json` (also by `monthly_update.bat`, or `python -m fieldpriority.zmd`) for when the feed is down |
 | Seasonal rainfall forecast 2026/27 | ZMD bulletin of 11 Sep 2026 | transcribed in `config/zmd_seasonal_forecast.yaml`; each statement placed on the districts it names (approximate where ZMD names only part of a province) |
-| Daily, weekly, 10-day agromet, sub-seasonal forecasts | zmd.gov.zm product pages | linked (published as web pages and documents, no data feed) |
+| Daily forecast, next 2-3 days | ZMD city forecast feed `https://zmd.gov.zm/api/forecasts` (16 towns, automated) | read live (every 30 minutes); each district shows its nearest forecast town and the distance; daily high/low/rain built from the time steps. Saved in `data/zmd/city_forecasts.json` |
+| Weekly, 10-day agromet, sub-seasonal forecasts | zmd.gov.zm product pages | linked (published as web pages and documents, no data feed) |
 
 **Each new season**: replace `config/zmd_seasonal_forecast.yaml` with the new bulletin (same structure: periods,
 categories, places, onset, cessation, advisories). The homepage shows warnings in force (or the seasonal outlook in one

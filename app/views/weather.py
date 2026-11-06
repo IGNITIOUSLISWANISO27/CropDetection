@@ -6,7 +6,8 @@ import pandas as pd
 import streamlit as st
 from branca.element import Element
 from _lib import (html_block, icon, national, location_records, show_map, link, type_tag, class_chip, empty, footer,
-                  zmd_alerts, zmd_seasonal, zmd_time, zmd_cat_chip, zmd_sev_chip, period_of, ZMD, E)
+                  zmd_alerts, zmd_seasonal, zmd_time, zmd_cat_chip, zmd_sev_chip, period_of, zmd_city, city_day_card,
+                  day_name, ZMD, E)
 
 nd = national()
 D = nd.districts.sort_values("district").reset_index(drop=True)
@@ -149,12 +150,60 @@ with st.expander(f"Recent ZMD alerts that have ended{' for ' + dname if dname el
     else:
         st.caption("None in ZMD's current feed.")
 
+# ================================================================ 2. daily forecast (next days), ZMD city forecasts
+import altair as alt  # noqa: E402
+
+CD, CS, NEAR, cst = zmd_city(nd)
+sec(2, "Daily forecast: the next days")
+if not len(CD):
+    st.warning("ZMD's city forecasts could not be reached and no saved copy exists yet. See "
+               "[zmd.gov.zm](https://zmd.gov.zm/) for today's forecast.")
+else:
+    when = (f"Live from zmd.gov.zm · checked {zmd_time(cst['checked'])}" if cst["live"] else
+            f"zmd.gov.zm could not be reached; showing the copy saved {zmd_time(cst['retrieved'])}")
+    if pick != "zambia":
+        city, km = NEAR.get(pick, (None, None))
+        cd = CD[CD["city"] == city]
+        far = f" · {km:.0f} km from the district centre" if km is not None and km >= 15 else ""
+        st.caption(f"Nearest ZMD forecast point: **{city}**{far}. {when}.")
+        if km is not None and km > 120:
+            st.caption("This forecast point is far away: local weather in the district can differ.")
+        html_block('<div class="fp-wdays">' + "".join(city_day_card(r) for r in cd.to_dict("records")[:3]) + '</div>')
+        cs = CS[(CS["city"] == city) & (~CS["whole_day"])].dropna(subset=["time"]).copy()
+        if len(cs) > 3:
+            cs["When"] = cs["time"].map(lambda t: t.astimezone(ZMD.CAT).replace(tzinfo=None))
+            cs["Temperature (°C)"] = (pd.to_numeric(cs["tmax"], errors="coerce") + pd.to_numeric(cs["tmin"], errors="coerce")) / 2
+            cs["Rain (mm)"] = pd.to_numeric(cs["rain_mm"], errors="coerce").fillna(0)
+            with st.expander("Hour by hour"):
+                base = alt.Chart(cs).encode(x=alt.X("When:T", title=None, axis=alt.Axis(format="%a %Hh")))
+                bars = base.mark_bar(color="#4C78A8", opacity=.75).encode(
+                    y=alt.Y("Rain (mm):Q", axis=alt.Axis(titleColor="#4C78A8")),
+                    tooltip=[alt.Tooltip("When:T", format="%a %d %b %H:%M"), "Rain (mm):Q", "condition_label:N"])
+                line = base.mark_line(point=True, color="#E8892B").encode(
+                    y=alt.Y("Temperature (°C):Q", scale=alt.Scale(zero=False), axis=alt.Axis(titleColor="#E8892B")),
+                    tooltip=[alt.Tooltip("When:T", format="%a %d %b %H:%M"), alt.Tooltip("Temperature (°C):Q", format=".1f")])
+                st.altair_chart(alt.layer(bars, line).resolve_scale(y="independent").properties(height=240),
+                                width="stretch")
+    else:
+        st.caption(f"{CD['city'].nunique()} ZMD forecast points; choose a district to see its nearest. {when}.")
+        days_ = sorted(CD["date"].unique())[:3]
+        d_sel = st.segmented_control("Day", days_, default=days_[min(1, len(days_) - 1)], key="wx_day",
+                                     format_func=day_name) or days_[0]
+        t = CD[CD["date"] == d_sel].sort_values("city")
+        st.dataframe(pd.DataFrame({"": t["icon"], "City": t["city"], "Weather": t["condition_label"].str.replace(
+            r" (Night|Day)$", "", regex=True), "High °C": t["high"].round(0), "Low °C": t["low"].round(0),
+            "Rain": t.apply(lambda r: f"up to {r['rain_max_mm']:.1f} mm" if r["rain_max_mm"] > 0 else "dry", axis=1),
+            "Humidity %": t["rh"].round(0)}), hide_index=True, width="stretch",
+            column_config={"": st.column_config.ImageColumn("", width="small")})
+    st.caption("Automated city forecasts published on zmd.gov.zm (model-based). Each district uses the "
+               "nearest forecast point.")
+
 # ================================================================ 2. seasonal forecast
 if spec is None or not len(S):
-    sec(2, "Seasonal rainfall forecast")
+    sec(3, "Seasonal rainfall forecast")
     empty("The ZMD seasonal forecast has not been loaded (config/zmd_seasonal_forecast.yaml).")
 else:
-    sec(2, f"Seasonal rainfall forecast {spec['season']}",
+    sec(3, f"Seasonal rainfall forecast {spec['season']}",
         f"Issued {E(zmd_time(spec['issued'] + 'T12:00:00+02:00', False))} · "
         f"<a href='{E(spec['pdf'])}' target='_blank'>full bulletin (PDF)</a>")
     with st.expander("Why ZMD expects this season"):
@@ -246,7 +295,7 @@ else:
                                              or "not mentioned"))
 
 # ================================================================ 3. connection with the platform
-sec(3, "Forecast and observations together")
+sec(4, "Forecast and observations together")
 if pick != "zambia" and spec is not None and len(S):
     rec = location_records(nd, pick)
     rain, maize = rec.get("rainfall_anomaly_pct") or {}, rec.get("maize_share_pct") or {}
@@ -267,7 +316,7 @@ else:
     st.caption("Choose a district to compare ZMD's forecast with what has been observed there.")
 
 # ================================================================ 4. more ZMD products
-sec(4, "Latest forecasts on zmd.gov.zm")
+sec(5, "Latest forecasts on zmd.gov.zm")
 html_block('<div class="fp-zprod">' + "".join(f'<a href="{E(u)}" target="_blank"><b>{E(t)} ↗</b><span>{E(s)}</span></a>'
                                               for t, u, s in ZMD.PRODUCTS) + '</div>')
 st.caption("Source: Zambia Meteorological Department (zmd.gov.zm). In an emergency follow ZMD and DMMU instructions.")

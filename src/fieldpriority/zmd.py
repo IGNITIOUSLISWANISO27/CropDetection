@@ -449,7 +449,105 @@ def alerts_table(doc, D, now=None):
     return T
 
 
+# ---------------------------------------------------------------- city forecasts (next 2-3 days)
+CITY_URL = "https://zmd.gov.zm/api/forecasts"
+CITY_CACHE = ROOT / "data" / "zmd" / "city_forecasts.json"
+CITY_FIX = {"mukushi": "Mkushi"}
+CAT = dt.timezone(dt.timedelta(hours=2))
+
+
+def city_name(s):
+    n = re.sub(r",\s*zambia\s*$", "", str(s).strip(), flags=re.I).strip()
+    return CITY_FIX.get(n.lower(), n[:1].upper() + n[1:])
+
+
+def get_city_forecasts(live=True, timeout=8, cache_path=None, get=None):
+    """(doc, live_ok, error). doc = {retrieved_at, source, forecasts}: the city forecasts published on zmd.gov.zm
+    (a list of GeoJSON FeatureCollections, one per date and time step). Live first, else the saved copy."""
+    p = Path(cache_path or os.environ.get("FIELDPRIORITY_ZMD_CITY_CACHE") or CITY_CACHE)
+    err = "Live download switched off"
+    if live and not os.environ.get("FIELDPRIORITY_ZMD_OFFLINE"):
+        try:
+            raw = json.loads((get or (lambda u: _get(u, timeout)))(CITY_URL))
+            if not isinstance(raw, list) or not raw:
+                raise ValueError("unexpected answer from the forecast feed")
+            doc = {"retrieved_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "source": CITY_URL,
+                   "forecasts": raw}
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(doc), encoding="utf-8")
+            return doc, True, ""
+        except Exception as e:
+            err = f"{type(e).__name__}: {e}"[:200]
+    try:
+        return json.loads(p.read_text(encoding="utf-8")), False, err
+    except (OSError, ValueError):
+        return None, False, err
+
+
+def city_steps(doc):
+    """One row per city and time step: city, lon, lat, date, label, whole_day, tmax, tmin, rain_mm, rh, condition."""
+    rows = []
+    for fc in (doc or {}).get("forecasts", []):
+        for f in fc.get("features", []):
+            p, (lon, lat) = f.get("properties", {}), f.get("geometry", {}).get("coordinates", [None, None])[:2]
+            t = parse_time(p.get("date")) or parse_time(fc.get("datetime"))
+            rows.append({"city": city_name(p.get("city")), "lon": lon, "lat": lat,
+                         "date": str(fc.get("date") or (t.date() if t else "")), "time": t,
+                         "label": p.get("effective_period_label", ""),
+                         "whole_day": str(p.get("effective_period_label", "")).lower().startswith("whole"),
+                         "tmax": p.get("air_temperature_max"), "tmin": p.get("air_temperature_min"),
+                         "rain_mm": p.get("precipitation_amount"), "rh": p.get("relative_humidity"),
+                         "condition": p.get("condition", ""), "condition_label": p.get("condition_label", ""),
+                         "icon": p.get("condition_symbol_url", "")})
+    return pd.DataFrame(rows)
+
+
+def city_days(steps, today=None):
+    """Per city and day: high, low, rain (largest amount in any period, periods with rain), daytime condition.
+    Built from the individual time steps; the feed's 'Whole day' entry is a single midnight step, so it is only
+    used when a day has no other steps."""
+    if steps is None or not len(steps):
+        return pd.DataFrame()
+    today = today or dt.datetime.now(CAT).date().isoformat()
+    out = []
+    for (c, d), g in steps[steps["date"] >= today].groupby(["city", "date"], sort=False):
+        s = g[~g["whole_day"]] if (~g["whole_day"]).any() else g
+        num = lambda k: pd.to_numeric(s[k], errors="coerce")
+        hours = s["time"].map(lambda t: t.astimezone(CAT).hour if t is not None and t == t else 12)
+        day = s.assign(h=hours)
+        pick = day.iloc[(day["h"] - 13).abs().argsort()].iloc[0]       # the step nearest early afternoon
+        rain = num("rain_mm").fillna(0)
+        out.append({"city": c, "date": d, "lon": g["lon"].iloc[0], "lat": g["lat"].iloc[0],
+                    "high": float(num("tmax").max()), "low": float(num("tmin").min()),
+                    "rain_max_mm": float(rain.max()), "rain_periods": int((rain > 0).sum()), "periods": len(s),
+                    "condition_label": pick["condition_label"], "icon": pick["icon"],
+                    "rh": float(num("rh").mean())})
+    return pd.DataFrame(out)
+
+
+def nearest_city(D, days):
+    """district_id -> (city, distance in km) to the nearest ZMD forecast city."""
+    import math
+    cities = days.drop_duplicates("city")[["city", "lon", "lat"]].values.tolist() if len(days) else []
+    out = {}
+    for r in D.itertuples():
+        best = None
+        for c, lo, la in cities:
+            p1, p2 = math.radians(float(r.lat)), math.radians(la)
+            a = (math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2)
+                 * math.sin(math.radians(lo - float(r.lon)) / 2) ** 2)
+            km = 2 * 6371 * math.asin(math.sqrt(a))
+            if best is None or km < best[1]:
+                best = (c, km)
+        if best:
+            out[r.district_id] = best
+    return out
+
+
 def main():
+    cd, cok, cerr = get_city_forecasts(live=True, timeout=20)
+    print(f"ZMD city forecasts saved: {len((cd or {}).get('forecasts', []))} time steps" if cok else
+          f"ZMD city forecasts not refreshed ({cerr}); the saved copy is kept.")
     doc, ok, err = get_alerts(live=True, timeout=20)
     if ok:
         print(f"ZMD alerts saved: {len(doc['alerts'])} in the feed, retrieved {doc['retrieved_at']}")

@@ -6,11 +6,11 @@ import streamlit as st
 
 st.set_page_config(page_title="FieldPriority · Integrated Agricultural & Environmental Intelligence", page_icon=":material/agriculture:",
                    layout="wide", initial_sidebar_state="collapsed")
-from _lib import CSS, CSS_V2, CSS_V3, CSS_ZMD, CSS_V4, CSS_V5, load_data
+from _lib import CSS, CSS_V2, CSS_V3, CSS_ZMD, CSS_V4, CSS_V5, CSS_WX, load_data
 
 A_DIR = Path(__file__).resolve().parent / "assets"
 st.logo(str(A_DIR / "logo_wordmark.svg"), size="large")
-st.markdown(CSS + CSS_V2 + CSS_V3 + CSS_ZMD + CSS_V4 + CSS_V5, unsafe_allow_html=True)
+st.markdown(CSS + CSS_V2 + CSS_V3 + CSS_ZMD + CSS_V4 + CSS_V5 + CSS_WX, unsafe_allow_html=True)
 
 # ---- pilot area (Solwezi, Chongwe, ...) for the field pages, kept in the URL as ?area=
 from _lib import PILOTS, _cfg
