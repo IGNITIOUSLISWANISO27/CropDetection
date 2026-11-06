@@ -24,10 +24,13 @@ ids = D["district_id"].tolist()
 names = dict(zip(D["district_id"], D["district"] + " · " + D["province"] + " Province"))
 OPTS = ["zambia"] + ids
 qd = st.query_params.get("district")
-if "wx_pick" not in st.session_state or (qd in ids and qd != st.session_state.get("wx_pick")):
+if "wx_pick" not in st.session_state:
     st.session_state["wx_pick"] = qd if qd in ids else "zambia"
+elif qd in ids and qd != st.session_state.get("_wx_seen"):     # a new link wins; the user's own choice stays
+    st.session_state["wx_pick"] = qd
 c1, c2 = st.columns([2, 1.3], vertical_alignment="bottom")
 pick = c1.selectbox("District", OPTS, key="wx_pick", format_func=lambda o: "All of Zambia" if o == "zambia" else names[o])
+st.session_state["_wx_seen"] = pick if pick != "zambia" else None
 if pick == "zambia":
     st.query_params.pop("district", None)
 else:

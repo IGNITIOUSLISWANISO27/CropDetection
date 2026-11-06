@@ -23,12 +23,16 @@ per = period_of(nd)
 
 qd, qprov, qz = st.query_params.get("district"), st.query_params.get("province"), st.query_params.get("zone")
 want = ("d:" + qd) if qd in ids else ("p:" + qprov) if qprov in provs else ("z:" + qz) if qz in zcodes else None
-if "loc_pick" not in st.session_state or (want and want != st.session_state.get("loc_pick")):
+# a link (?district=...) only wins when it is NEW; otherwise the user's own choice in the box stays
+if "loc_pick" not in st.session_state or st.session_state["loc_pick"] not in OPTS:
     st.session_state["loc_pick"] = want or ("d:" + (F["district_id"].dropna().iloc[0] if len(F) and
                                                     F["district_id"].notna().any() else "solwezi"))
+elif want and want != st.session_state.get("_loc_seen"):
+    st.session_state["loc_pick"] = want
 
 s1, s2 = st.columns([3, 1], vertical_alignment="bottom")
 pick = s1.selectbox("Location", OPTS, key="loc_pick", format_func=names.get, label_visibility="collapsed")
+st.session_state["_loc_seen"] = pick
 is_zone = pick.startswith("z:")
 is_prov = pick.startswith("p:") or is_zone          # both are groups of districts
 for k in ("district", "province", "zone"):
