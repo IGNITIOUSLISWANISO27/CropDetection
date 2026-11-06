@@ -18,8 +18,30 @@ def write_outputs(out_dir, monthly, season, assessments_df, assessments, fields,
     g = fields.merge(assessments_df[["Field_ID", "outcome", "risk_level", "data_confidence", "priority",
                                      "integrated_score", "confidence", "confidence_label", "regional_share"]],
                      on="Field_ID")
-    g.to_file(out / "fields_assessed.geojson", driver="GeoJSON")
+    write_geojson(g, out / "fields_assessed.geojson")
     return out
+
+
+def write_geojson(g, path, tries=6, wait=2.0):
+    """Write to a temporary file, then swap it in. On Windows a file another program has open (the dashboard,
+    QGIS, a sync client such as OneDrive) cannot be replaced for a moment, so the swap is retried; if it stays
+    locked the previous file is kept and a clear message is printed instead of stopping the whole run."""
+    import os
+    import time
+    path = Path(path)
+    tmp = path.with_name(path.stem + ".tmp" + path.suffix)
+    if tmp.exists():
+        tmp.unlink()
+    g.to_file(tmp, driver="GeoJSON")
+    for i in range(tries):
+        try:
+            os.replace(tmp, path)
+            return True
+        except PermissionError:
+            time.sleep(wait)
+    print(f"WARNING: could not update {path} (another program has it open: close the dashboard, QGIS or "
+          f"Excel and run again). The previous file is kept; the new one is in {tmp.name}.")
+    return False
 
 
 LEDGER_COLUMNS = ["alert_id", "field_id", "alert_date", "assessment_date", "data_end_date", "model_version",
