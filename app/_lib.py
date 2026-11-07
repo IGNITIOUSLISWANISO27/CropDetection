@@ -1845,6 +1845,17 @@ CSS_V6 = """
 .fp-flow4 span{font:700 .64rem var(--fb);letter-spacing:.08em;color:#F2C74E;border:1px solid rgba(242,199,78,.55);
   padding:3px 7px;border-radius:6px;white-space:nowrap}
 .fp-flow4 i{color:#F2C74E;font-style:normal}
+.fp-why4{display:grid;grid-template-columns:1fr 1fr 1.15fr .85fr;gap:12px;margin:.2rem 0 1rem}
+.fp-why4 .c{background:#fff;border:1px solid var(--line);border-top:4px solid var(--forest);border-radius:14px;
+  padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.fp-why4 .c p{margin:0;font:600 1rem/1.4 var(--fb);color:var(--ink)}
+.fp-why4 .stat{border-top-color:#B9342B}
+.fp-why4 .stat .big{font:800 2.4rem/1 var(--fh);color:#B9342B}
+.fp-why4 .cta{background:var(--forest);border-color:var(--forest);text-decoration:none !important;justify-content:center}
+.fp-why4 .cta b{color:#fff;font:800 1.15rem/1.3 var(--fh)}
+.fp-why4 .cta:hover{background:#163829}
+@media (max-width: 1000px){ .fp-why4{grid-template-columns:1fr 1fr} }
+@media (max-width: 640px){ .fp-why4{grid-template-columns:1fr} }
 @media (max-width: 1000px){ .fp-cond{grid-template-columns:1fr} .fp-cond .g{grid-template-columns:repeat(3,1fr)}
   .fp-cond .c{border-top:1px solid var(--line)} .fp-f2i .row{flex-wrap:wrap} .fp-f2i .st{flex:1 1 30%}
   .fp-f2i .ar{display:none} }
