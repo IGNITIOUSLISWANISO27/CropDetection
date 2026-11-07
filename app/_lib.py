@@ -1642,48 +1642,66 @@ def national_answers(nd, fields):
     flag = [d for d, it in lv.items() if it["level"] in ("concern", "watch")]
     conc = [d for d in flag if lv[d]["level"] == "concern"]
     n = len([1 for it in lv.values() if it["level"] != "unknown"])
+    watch_names = [names.get(d, d) for d in (conc + [d for d in flag if d not in conc])]
+    def _list(xs):
+        return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1]
     if not flag:
         what, colr = "Good growing conditions across Zambia", "#2E8B57"
     elif len(conc) > n / 4:
-        what, colr = f"Crop moisture stress building in {len(conc)} districts", "#B9342B"
+        what, colr = f"Crop moisture stress is building in {len(conc)} districts", "#B9342B"
     else:
-        what, colr = f"Mostly good conditions; {len(flag)} district{'s' if len(flag) > 1 else ''} to watch", "#C8870F"
-    parts = []
-    for ind, lab in (("vegetation_anomaly_pct", "crop greenness"), ("soil_moisture_anomaly_pct", "soil moisture")):
-        t = ok(ind)
-        if len(t):
-            b = int(t["class"].isin(["Below normal", "Well below normal"]).sum())
-            parts.append(f"{lab} below normal in {b} of {len(t)}")
+        what, colr = (f"Conditions are mostly good, with early warnings in {len(flag)} "
+                      f"district{'s' if len(flag) > 1 else ''}"), "#C8870F"
+    # one plain sentence, crop first
+    cl = []
+    t = ok("vegetation_anomaly_pct")
+    if len(t):
+        b_ = int(t["class"].isin(["Below normal", "Well below normal"]).sum())
+        cl.append("crops are as green as normal everywhere" if not b_ else
+                  f"crops are less green than normal in {b_} district{'s' if b_ > 1 else ''}")
+    t = ok("soil_moisture_anomaly_pct")
+    if len(t):
+        b_ = int(t["class"].isin(["Below normal", "Well below normal"]).sum())
+        cl.append("soil moisture is normal" if not b_ else
+                  f"the soil is drier than usual in only {b_} district{'s' if b_ > 1 else ''}" if b_ <= 5 else
+                  f"the soil is drier than usual in {b_} districts")
     rain = ok("rainfall_anomaly_pct")
     if len(rain):
-        parts.append(f"rainfall {float(pd.to_numeric(rain['value'], errors='coerce').median()):+.0f}% (median)")
+        med = float(pd.to_numeric(rain["value"], errors="coerce").median())
+        cl.append(f"rainfall is {abs(med):.0f}% {'above' if med > 0 else 'below'} normal overall" if abs(med) >= 5
+                  else "rainfall is close to normal")
     tmp = ok("temperature_deviation")
     if len(tmp):
-        parts.append(f"temperature above normal in "
-                     f"{int(tmp['class'].isin(['Warmer than normal', 'Much warmer than normal']).sum())} of {len(tmp)}")
+        k = int(tmp["class"].isin(["Warmer than normal", "Much warmer than normal"]).sum())
+        if k:
+            cl.append(f"{k} district{'s are' if k > 1 else ' is'} warmer than usual")
+    sub = (_list(cl) + ".") if cl else ""
+    sub = sub[:1].upper() + sub[1:]
+    if flag:
+        sub += f" Early warning: {_list(watch_names[:4])}."
     nf = len(fields)
     if nf:
-        parts.append(f"{int(fields['visits'].sum())} field visit(s)")
-    sub = ("; ".join(parts) + ".")[:1].upper() + ("; ".join(parts) + ".")[1:]
-    if flag:
-        sub += " To watch: " + ", ".join(names.get(d, d) for d in (conc + [d for d in flag if d not in conc])[:4]) + "."
+        v_ = int(fields["visits"].sum())
+        sub += f" Field visits so far: {v_}." if v_ else ""
     mz = ok("maize_share_pct")
     mzd = set(mz[pd.to_numeric(mz["value"], errors="coerce") >= NCFG["classes"]["maize_share_pct"]]["location_id"])
     hit = sorted(set(flag) & mzd)
     if mzd:
-        why = (f"{len(hit)} of {len(mzd)} maize-growing districts show signs of stress." if hit else
-               f"None of the {len(mzd)} maize-growing districts shows signs of stress.")
+        why = (f"{len(hit)} of Zambia's {len(mzd)} main maize districts show early signs of stress." if hit else
+               f"Zambia's {len(mzd)} main maize districts are not under stress.")
     else:
-        why = f"{len(flag)} district(s) show signs of stress."
-    why_sub = "Maize is Zambia's staple: stress in maize areas affects food security and income."
-    nxt = [f"Consider field checks in the {len(flag)} flagged district{'s' if len(flag) > 1 else ''}"] if flag else []
+        why = f"{len(flag)} district{'s show' if len(flag) != 1 else ' shows'} early signs of stress."
+    why_sub = ("Maize is Zambia's staple food: stress in these districts would hit food supply and farm income "
+               "first.")
+    nxt = [f"Consider field checks in {_list(watch_names[:3])}" if len(flag) <= 3 else
+           f"Consider field checks in the {len(flag)} early-warning districts"] if flag else []
     spec, S, _, _ = zmd_seasonal()
     if spec is not None and len(S):
         d = S[S["period"] == "DJF"]
         nb = int((d["rank"] <= 2).sum())
         if nb > len(d) / 2:
-            nxt.append(f"Consider a drier Dec–Feb: ZMD expects it in {nb} districts")
-    nxt.append("Add field observations to strengthen the picture" if kobo_form_url() else
+            nxt.append(f"Prepare for a drier December–February, which ZMD forecasts for {nb} districts")
+    nxt.append("Add field observations to confirm conditions on the ground" if kobo_form_url() else
                "Open any district for its full picture")
     return what, sub, why, why_sub, nxt, colr
 
