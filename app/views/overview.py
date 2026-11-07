@@ -35,7 +35,13 @@ except Exception:
 what, what_sub, why, why_sub, nxt, colr = national_answers(nd, F)
 html_block(f'<div class="fp-panel-h"><span>{icon("gauge", 18, "#1F4D3A")} Zambia this season</span>'
            f'<span class="fp-mini">{E(nd.report.get("period_label") or "")}</span></div>')
-html_block(answer_cards_html(what, E(what_sub), why, E(why_sub), nxt, colr))
+why = "Climate and environmental conditions can significantly affect Zambia's food production and farmer incomes."
+why_html = ("During the 2023/24 drought, <b>Zambia's maize production fell by more than 50%</b> compared with the "
+            "previous season.<br><br>FieldPriority helps identify where changing conditions may be affecting crops, "
+            "water availability and agricultural productivity before the picture becomes harder to respond to."
+            '<div style="margin-top:.6rem"><a href="' + link("/map") + '" target="_self" style="font-weight:700">'
+            "See what is happening across Zambia →</a></div>")
+html_block(answer_cards_html(what, E(what_sub), why, why_html, nxt, colr))
 
 # ---------------------------------------------------------------- map + spotlight
 D = nd.districts.sort_values("district")
