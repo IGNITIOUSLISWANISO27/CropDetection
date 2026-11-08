@@ -240,6 +240,11 @@ div[data-testid="stMetric"]{background:var(--paper);border:1px solid var(--line)
 }
 </style>
 """
+from fieldpriority import offline as _offline   # noqa: E402
+OFFLINE = _offline.is_offline()
+if OFFLINE:   # pitch mode: bundled fonts instead of Google Fonts
+    CSS = CSS.replace(CSS[CSS.index("@import url('https://fonts.googleapis.com"):CSS.index("display=swap');") + 15],
+                      _offline.font_faces_css(), 1)
 
 
 # ================================================================ small components
@@ -531,6 +536,8 @@ def build_map(data, A=None, basemap="Satellite", view="Fit fields", focus=None, 
 
 def show_map(m, height=560):
     html_doc = m.get_root().render()
+    if OFFLINE:
+        html_doc = _offline.offline_map_html(html_doc)
     if hasattr(st, "iframe"):
         st.iframe(html_doc, height=height)
     else:
@@ -816,13 +823,20 @@ def kobo_token():
 def kobo_photo(url):
     """Download one Kobo attachment with the API token (server side, never sent to the browser)."""
     import urllib.request
+    if not url:
+        return None
+    got = _offline.cached_photo(url)          # saved copy first (prepare_offline.bat, or an earlier view)
+    if got or OFFLINE:
+        return got
     tok = kobo_token()
-    if not tok or not url:
+    if not tok:
         return None
     try:
         req = urllib.request.Request(url, headers={"Authorization": f"Token {tok}", "User-Agent": "FieldPriority"})
         with urllib.request.urlopen(req, timeout=20) as r:
-            return r.read()
+            data = r.read()
+        _offline.save_photo(url, data)
+        return data
     except Exception:
         return None
 
