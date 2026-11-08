@@ -7,7 +7,7 @@ from _lib import (html_block, icon, footer, national, monitored_fields, layer_av
                   type_tag, kobo_button, STATUS, ROOT, E)
 
 nd = national()
-F = monitored_fields(nd)
+F = monitored_fields(nd, everyone=True)   # availability counts only
 page_title("About / Methodology", "Purpose, evidence, method and accuracy.", eyebrow="FieldPriority", icon_name="doc")
 
 caps = ["Geospatial agricultural monitoring", "Crop and vegetation condition assessment",

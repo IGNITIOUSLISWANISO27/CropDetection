@@ -27,6 +27,34 @@ from fieldpriority.config import available_pilots
 PILOTS = available_pilots()
 
 
+# ---------------------------------------------------------------- accounts: field evidence is per user
+from fieldpriority import auth as _auth
+
+
+def auth_users():
+    try:
+        return _auth.users_from(st.secrets)
+    except Exception:
+        return {}
+
+
+def current_user():
+    try:
+        return st.session_state.get("fp_user")
+    except Exception:
+        return None
+
+
+def user_pilots():
+    """Pilot areas the signed-in account may see (none when signed out)."""
+    return _auth.pilots_for(current_user(), PILOTS)
+
+
+def signin_link_html(text="Sign in to view field evidence"):
+    return (f'<a class="fp-btn" href="{link("/login")}" target="_self" style="background:var(--forest);color:#fff">'
+            f'{icon("lock", 16, "#fff")} {E(text)}</a>')
+
+
 def current_pilot():
     try:
         p = st.session_state.get("pilot")
@@ -110,6 +138,7 @@ ICONS = {   # 24x24 stroke icons, drawn for this app
     "camera": '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7l1.5-3h5L16 7"/><circle cx="12" cy="13.5" r="3.5"/>',
     "clock": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     "doc": '<path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+    "lock": '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
 }
 
 
@@ -834,11 +863,12 @@ def pilot_data(p):
         return None
 
 
-def monitored_fields(nd=None):
-    """Every assessed field of every pilot area, with its district (from the boundary file) and its visits."""
+def monitored_fields(nd=None, everyone=False):
+    """Assessed fields of the signed-in account's pilot areas (everyone=True: all areas, for counts only), with
+    their district (from the boundary file) and visits. Signed out: no fields."""
     import geopandas as gpd
     rows = []
-    for p in PILOTS:
+    for p in (PILOTS if everyone else user_pilots()):
         d = pilot_data(p)
         if d is None or d.assessments is None or d.assessments.empty:
             continue
@@ -1420,8 +1450,12 @@ def _node(rec, title, ic, state=None, value=None, note=None, dtype=None):
             f'<div class="v">{E(value)}</div><div class="n" style="color:{fg}">{E(note or "")}</div>{tag}</div>')
 
 
-def _field_node(fields):
+def _field_node(fields, locked=0):
     f = fields if fields is not None else pd.DataFrame()
+    if not len(f) and locked:
+        return _node({"status": "ok"}, "Field evidence", "camera", "ok",
+                     f"{locked} field{'s' if locked > 1 else ''}", "Protected: sign in to view",
+                     dtype="field_observation")
     if len(f):
         hi = int(f["risk_level"].isin(["High", "Moderate", "Not attributed"]).sum())
         wa = int((f["risk_level"] == "Watch").sum())
@@ -1434,11 +1468,11 @@ def _field_node(fields):
                  dtype="field_observation")
 
 
-def signal_chain_html(recs, fields=None, together=""):
+def signal_chain_html(recs, fields=None, together="", locked=0):
     """The evidence behind an assessment, in the order the platform reads it: field & satellite evidence ->
     environmental conditions -> water -> integrated assessment. Every box says what kind of data it is."""
     groups = [
-        ("Field & satellite evidence", [_field_node(fields),
+        ("Field & satellite evidence", [_field_node(fields, locked),
                                         _node(recs.get("vegetation_anomaly_pct"), "Crop greenness", "leaf")]),
         ("Environmental conditions", [_node(recs.get("rainfall_anomaly_pct"), "Rainfall", "drop"),
                                       _node(recs.get("temperature_deviation"), "Temperature", "thermo")]),
@@ -1469,7 +1503,7 @@ def _arrow(v, near, up_bad):
     return ("↑" if up else "↓"), ("warn" if bad else "ok")
 
 
-def condition_signals(recs, fields=None):
+def condition_signals(recs, fields=None, locked=0):
     """The five headline signals: (label, arrow, state, short text, data type)."""
     def val(k):
         r = recs.get(k) or {}
@@ -1499,6 +1533,9 @@ def condition_signals(recs, fields=None):
         out.append(("Field evidence", "✓" if vis else "○", ("bad" if hi else "ok") if vis else "warn",
                     f"{vis} visit{'s' if vis != 1 else ''}, {len(f)} field{'s' if len(f) > 1 else ''}"
                     if vis else f"{len(f)} field{'s' if len(f) > 1 else ''}, awaiting visit", "field_observation"))
+    elif locked:
+        out.append(("Field evidence", "🔒", "ok", f"{locked} field{'s' if locked > 1 else ''} · sign in to view",
+                    "field_observation"))
     else:
         out.append(("Field evidence", "○", "none", "None yet", "field_observation"))
     return out

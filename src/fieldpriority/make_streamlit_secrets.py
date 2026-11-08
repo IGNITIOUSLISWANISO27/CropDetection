@@ -19,6 +19,18 @@ def to_toml(key, kobo_token=None):
     return "\n".join(lines) + "\n"
 
 
+def auth_blocks(text):
+    """The [auth...] tables of an existing secrets.toml (dashboard accounts), so regenerating keeps them."""
+    out, keep = [], False
+    for ln in text.splitlines():
+        s = ln.strip()
+        if s.startswith("["):
+            keep = s.startswith("[auth")
+        if keep:
+            out.append(ln)
+    return "\n".join(out).strip() + "\n" if out else ""
+
+
 def main():
     path = find_credentials()
     if not isinstance(path, str):
@@ -29,7 +41,8 @@ def main():
     from .ingest.kobo import load_dotenv
     import os
     load_dotenv()
-    out.write_text(to_toml(key, os.environ.get("KOBO_TOKEN")))
+    keep = auth_blocks(out.read_text(encoding="utf-8")) if out.exists() else ""
+    out.write_text(to_toml(key, os.environ.get("KOBO_TOKEN")) + (("\n" + keep) if keep else ""), encoding="utf-8")
     print(f"Written {out}\nOpen it, copy everything, and paste it into Settings > Secrets of the app on "
           "share.streamlit.io.\nDo NOT upload this file or firebase-key.json to GitHub.")
 

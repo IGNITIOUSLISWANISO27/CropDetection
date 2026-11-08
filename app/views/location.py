@@ -5,11 +5,12 @@ import pandas as pd
 import streamlit as st
 from _lib import (html_block, icon, badge, national, monitored_fields, location_records, build_zambia_map, show_map,
                   period_of, type_tag, empty, link, interpret, kobo_photo, signal_chain_html, answer_cards_html, kobo_button,
-                  condition_signals, condition_strip_html, field_to_intel_html, conf_tag,
+                  condition_signals, condition_strip_html, field_to_intel_html, conf_tag, signin_link_html,
                   zmd_seasonal, zmd_alerts, zmd_cat_chip, ZMD, STATUS, NCFG, NMON, E)
 
 nd = national()
 F = monitored_fields(nd)
+F_ALL = monitored_fields(nd, everyone=True)      # counts only, for the protected-evidence notice
 D = nd.districts.sort_values("district").reset_index(drop=True)
 ids = D["district_id"].tolist()
 provs = sorted(D["province"].unique())
@@ -45,6 +46,7 @@ if is_zone:
     recs, M, S_prov, members = zone_view(nd, NCFG, zc)
     did, prov = zone_id(zc), None
     here = F[F["district_id"].isin(members)] if len(F) else F
+    here_all = F_ALL[F_ALL["district_id"].isin(members)] if len(F_ALL) else F_ALL
     name = f"Zone {ZONES[zc]['name']}: {ZONES[zc]['short']}"
     rows_d = D[D["district_id"].isin(members)]
 elif is_prov:
@@ -54,6 +56,7 @@ elif is_prov:
     recs, M, S_prov, members = province_view(nd, NCFG, prov)
     did = province_id(prov)
     here = F[F["province"] == prov] if len(F) else F
+    here_all = F_ALL[F_ALL["province"] == prov] if len(F_ALL) else F_ALL
     name = f"{prov} Province"
     rows_d = D[D["province"] == prov]
 else:
@@ -61,6 +64,7 @@ else:
     st.query_params["district"] = did
     recs = location_records(nd, did)
     here = F[F["district_id"] == did] if len(F) else F
+    here_all = F_ALL[F_ALL["district_id"] == did] if len(F_ALL) else F_ALL
     members = [did]
     rows_d = D[D["district_id"] == did]
     name = rows_d.iloc[0]["district"]
@@ -90,6 +94,7 @@ rain_m = month_table("rainfall_mm")
 monthly_rain = {r["m"]: ((r["This season"] - r["Normal"]) / r["Normal"] * 100
                          if r["Normal"] and pd.notna(r["This season"]) else None)
                 for r in rain_m.to_dict("records")} if len(rain_m) else {}
+locked = max(len(here_all) - len(here), 0)     # fields here that this visitor may not see
 flds = [{"field_id": r.field_id, "risk_level": r.risk_level, "visits": r.visits} for r in here.itertuples()] if len(here) else []
 it = interpret(name, recs, NCFG["classes"], fields=flds, monthly_rain=monthly_rain, period_label=per)
 lab, col = STATUS[it["status"]]
@@ -115,8 +120,8 @@ mz = recs.get("maize_share_pct") or {}
 if mz.get("status") == "ok":
     chips.append(f"{mz['class']} · {float(mz['value']):.0f}% of land under maize")
 chips.append(f"Season {per}")
-if len(here):
-    chips.append(f"{len(here)} monitored field(s)")
+if len(here) or locked:
+    chips.append(f"{len(here) + locked} monitored field(s)" + (" · protected" if locked and not len(here) else ""))
 html_block(f'<div class="fp-loc"><div style="width:52px;height:52px;border-radius:14px;background:#D9A21B;display:grid;'
            f'place-items:center">{icon("field" if is_zone else "layers" if is_prov else "pin", 28, "#1F4D3A", 2.2)}'
            f'</div><div><h1>{E(name)}</h1><div class="chips">{"".join(f"<span>{E(c)}</span>" for c in chips)}</div>'
@@ -127,7 +132,7 @@ if not nd.available:
     st.stop()
 
 # ---------------------------------------------------------------- 1. current agricultural condition (dominant)
-html_block(condition_strip_html(it["status"], condition_signals(recs, here), it.get("evidence"), it["short"]))
+html_block(condition_strip_html(it["status"], condition_signals(recs, here, locked), it.get("evidence"), it["short"]))
 
 # ---------------------------------------------------------------- 2. the integrated interpretation (hero)
 why_sub = (f"{mz['class']} {kind} ({float(mz['value']):.0f}% of land under maize)." if mz.get("status") == "ok" else "")
@@ -140,7 +145,7 @@ with st.container(border=True):
     html_block(f'<div class="fp-panel-h"><span>{icon("layers", 18, "#1F4D3A")} The evidence behind this assessment</span>'
                f'<span style="display:flex;gap:10px;align-items:center"><span class="fp-mini fp-hint">Hover a box for source, '
                f'date and confidence</span>{kobo_button(small=True)}</span></div>')
-    html_block(signal_chain_html(recs, here))
+    html_block(signal_chain_html(recs, here, locked=locked))
 
 # ---------------------------------------------------------------- 4. crop evidence (one evidence layer)
 def crop_card(r):
@@ -183,6 +188,11 @@ if len(here):
                    f'<span class="fp-mini">We don\'t just identify the crop: we read the conditions around it</span></div>')
         for r in here.itertuples():
             crop_card(r)
+elif locked:
+    html_block(f'<div class="fp-zban" style="background:#EEF3EF;border:1px solid #C9D8CD;color:#1E2A24">'
+               f'<div class="ic" style="background:var(--forest);color:#fff">{icon("lock", 20)}</div><div style="flex:1">'
+               f'<b>{locked} monitored field{"s" if locked > 1 else ""} here.</b> Field observations, photos and exact '
+               f'locations are shared only with the account that collected them.</div>{signin_link_html("Sign in")}</div>')
 else:
     kb = kobo_button(small=True)
     if kb:
